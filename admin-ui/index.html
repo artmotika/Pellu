@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFA Platform Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">DFA Platform | Admin Panel</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">KYC Management</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">User ID</label>
+                            <input type="text" id="kycUserId" class="form-control" placeholder="user-uuid">
+                        </div>
+                        <button onclick="updateKyc(true)" class="btn btn-success w-100 mb-2">Approve KYC</button>
+                        <button onclick="updateKyc(false)" class="btn btn-outline-danger w-100">Reject KYC</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">AML & Security</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">User ID</label>
+                            <input type="text" id="amlUserId" class="form-control" placeholder="user-uuid">
+                        </div>
+                        <button onclick="toggleFreeze(true)" class="btn btn-warning w-100 mb-2">Freeze Account</button>
+                        <button onclick="toggleFreeze(false)" class="btn btn-outline-primary w-100">Unfreeze Account</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">Corporate Actions</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Asset ID</label>
+                            <input type="text" id="assetId" class="form-control" placeholder="asset-uuid">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Amount per Share</label>
+                            <input type="number" id="divAmount" class="form-control" placeholder="0.05">
+                        </div>
+                        <button onclick="payoutDividends()" class="btn btn-primary w-100">Distribute Dividends</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white">System Status (Metrics)</div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col">
+                        <h3 class="text-primary" id="tps">---</h3>
+                        <small class="text-muted">TPS</small>
+                    </div>
+                    <div class="col">
+                        <h3 class="text-success" id="volume">---</h3>
+                        <small class="text-muted">Daily Volume (RUB)</small>
+                    </div>
+                    <div class="col">
+                        <h3 class="text-danger" id="rejections">---</h3>
+                        <small class="text-muted">AML Rejections</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "http://localhost:8080/api/v1/admin";
+
+        async function updateKyc(approved) {
+            const userId = document.getElementById('kycUserId').value;
+            await fetch(`${API_BASE}/kyc`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId, approved })
+            });
+            alert('KYC Request Sent');
+        }
+
+        async function toggleFreeze(freeze) {
+            const userId = document.getElementById('amlUserId').value;
+            await fetch(`${API_BASE}/freeze`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId, freeze })
+            });
+            alert('AML Freeze Command Sent');
+        }
+
+        async function payoutDividends() {
+            const assetId = document.getElementById('assetId').value;
+            const amount = document.getElementById('divAmount').value;
+            // This would call a new endpoint in Gateway that forwards to CorporateActionService
+            alert('Dividend distribution initiated');
+        }
+    </script>
+</body>
+</html>

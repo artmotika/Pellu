@@ -2,15 +2,20 @@ package org.artmotika.tradingengineservice.service;
 
 import lombok.RequiredArgsConstructor;
 import org.artmotika.common.dto.OrderRequestDto;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import jakarta.annotation.PostConstruct;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.dto.ValidatedOrderEventDto;
 import org.artmotika.tradingengineservice.exception.PriceVolatilityException;
 import org.artmotika.tradingengineservice.model.Order;
 import org.artmotika.tradingengineservice.model.TradeLedger;
+import org.artmotika.tradingengineservice.model.TaxLedger;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
 import org.artmotika.tradingengineservice.repo.OrderRepository;
 import org.artmotika.tradingengineservice.repo.TradeLedgerRepository;
 import org.artmotika.tradingengineservice.repo.UserRepository;
+import org.artmotika.tradingengineservice.repo.TaxLedgerRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,8 +27,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -32,20 +39,34 @@ public class TradingEngineService {
     private final TradeLedgerRepository ledgerRepository;
     private final UserRepository userRepository;
     private final AssetRepository assetRepository;
+    private final TaxLedgerRepository taxLedgerRepository;
     private final KafkaTemplate<String, ValidatedOrderEventDto> kafkaTemplate;
+
+    // High-performance in-memory price tracking (Sliding Window of last 10 prices per asset)
+    private final Cache<String, LinkedList<BigDecimal>> priceCache = Caffeine.newBuilder()
+            .expireAfterAccess(1, TimeUnit.HOURS)
+            .maximumSize(1000)
+            .build();
+
+    @PostConstruct
+    public void initCache() {
+        // Pre-warming cache with recent trades could be added here for production
+    }
 
     @KafkaListener(topics = "orders.created", groupId = "trading-engine-group")
     public void consumeOrder(OrderRequestDto dto) {
-        List<TradeLedger> lastTrades = ledgerRepository.findTop10ByOrder_Asset_IdOrderByTimestampDesc(dto.getAssetId());
+        // Fast volatility check using in-memory state
+        LinkedList<BigDecimal> prices = priceCache.getIfPresent(dto.getAssetId());
+        if (prices != null && !prices.isEmpty()) {
+            BigDecimal sum = prices.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal avg = sum.divide(new BigDecimal(prices.size()), 4, RoundingMode.HALF_UP);
+            
+            BigDecimal volatilityThreshold = new BigDecimal("0.20"); // 20%
+            BigDecimal diff = dto.getPrice().subtract(avg).abs();
+            BigDecimal thresholdAmount = avg.multiply(volatilityThreshold);
 
-        if (!lastTrades.isEmpty()) {
-            BigDecimal sum = lastTrades.stream().map(TradeLedger::getExecutionPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal avg = sum.divide(new BigDecimal(lastTrades.size()), 4, RoundingMode.HALF_UP);
-            BigDecimal upper = avg.multiply(new BigDecimal("1.20"));
-            BigDecimal lower = avg.multiply(new BigDecimal("0.80"));
-
-            if (dto.getPrice().compareTo(upper) > 0 || dto.getPrice().compareTo(lower) < 0) {
-                throw new PriceVolatilityException("Order price outside 20% volatility threshold");
+            if (diff.compareTo(thresholdAmount) > 0) {
+                throw new PriceVolatilityException("Price spike detected (20%+). Risk check failed.");
             }
         }
 
@@ -79,6 +100,30 @@ public class TradingEngineService {
         ledger.setExecutionPrice(order.getPrice());
         ledger.setTimestamp(LocalDateTime.now());
         ledgerRepository.save(ledger);
+
+        // --- Tax Agent Module (Regulatory Requirement) ---
+        if (order.getType() == Order.OrderType.SELL) {
+            BigDecimal taxRate = new BigDecimal("0.13"); // 13% NDFL
+            BigDecimal volume = order.getAmount().multiply(order.getPrice());
+            BigDecimal taxAmount = volume.multiply(taxRate).setScale(4, RoundingMode.HALF_UP);
+
+            TaxLedger tax = new TaxLedger();
+            tax.setId(UUID.randomUUID().toString());
+            tax.setUser(order.getUser());
+            tax.setOrder(order);
+            tax.setTaxAmount(taxAmount);
+            tax.setTimestamp(LocalDateTime.now());
+            taxLedgerRepository.save(tax);
+        }
+
+        // Atomic update of in-memory price tracker
+        updatePriceCache(order.getAsset().getId(), order.getPrice());
+    }
+
+    private synchronized void updatePriceCache(String assetId, BigDecimal price) {
+        LinkedList<BigDecimal> prices = priceCache.get(assetId, k -> new LinkedList<>());
+        if (prices.size() >= 10) { prices.removeFirst(); }
+        prices.addLast(price);
     }
 
     @Scheduled(cron = "0 0 23 * * ?")

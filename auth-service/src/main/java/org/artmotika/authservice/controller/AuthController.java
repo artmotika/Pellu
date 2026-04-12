@@ -21,4 +21,9 @@ public class AuthController {
     public Map<String, String> login(@RequestBody Map<String, String> req) {
         return Map.of("token", authService.login(req.get("wallet"), req.get("password")));
     }
+
+    @PostMapping("/esia/login")
+    public Map<String, String> loginEsia(@RequestParam String code) {
+        return Map.of("token", authService.loginViaEsia(code));
+    }
 }

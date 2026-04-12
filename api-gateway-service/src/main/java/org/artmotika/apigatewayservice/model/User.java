@@ -12,4 +12,5 @@ public class User {
     private String walletAddress;
     private String kycStatus;
     private Integer amlRiskScore;
+    private boolean isQualified;
 }

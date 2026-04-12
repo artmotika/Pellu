@@ -4,13 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.apigatewayservice.exception.AmlViolationException;
 import org.artmotika.apigatewayservice.exception.KycNotVerifiedException;
+import org.artmotika.apigatewayservice.model.InvestorLimit;
 import org.artmotika.apigatewayservice.model.User;
+import org.artmotika.apigatewayservice.repo.InvestorLimitRepository;
 import org.artmotika.apigatewayservice.repo.UserRepository;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,8 +24,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AmlKycService {
     private final KafkaTemplate<String, OrderRequestDto> kafkaTemplate;
     private final UserRepository userRepository;
+    private final InvestorLimitRepository investorLimitRepository;
     private final Map<String, List<Long>> userOrderTimestamps = new ConcurrentHashMap<>();
-    private final Map<String, Integer> userAmlScores = new ConcurrentHashMap<>();
+
+    private static final BigDecimal RETAIL_ANNUAL_LIMIT = new BigDecimal("600000");
 
     public void processOrder(OrderRequestDto order) {
         User user = userRepository.findById(order.getUserId())
@@ -30,6 +35,25 @@ public class AmlKycService {
 
         if (!"APPROVED".equals(user.getKycStatus())) {
             throw new KycNotVerifiedException("User KYC not approved");
+        }
+
+        // --- Investor Limit Check (Central Bank Rule) ---
+        if (!user.isQualified() && "BUY".equalsIgnoreCase(order.getType())) {
+            BigDecimal orderValue = order.getAmount().multiply(order.getPrice());
+            InvestorLimit limit = investorLimitRepository.findById(user.getId()).orElseGet(() -> {
+                InvestorLimit l = new InvestorLimit();
+                l.setUserId(user.getId());
+                l.setAnnualInvestment(BigDecimal.ZERO);
+                l.setLastReset(LocalDateTime.now());
+                return l;
+            });
+
+            BigDecimal newTotal = limit.getAnnualInvestment().add(orderValue);
+            if (newTotal.compareTo(RETAIL_ANNUAL_LIMIT) > 0) {
+                throw new AmlViolationException("Retail investor annual limit (600,000 RUB) exceeded");
+            }
+            limit.setAnnualInvestment(newTotal);
+            investorLimitRepository.save(limit);
         }
 
         long now = Instant.now().toEpochMilli();

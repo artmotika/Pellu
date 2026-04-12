@@ -2,6 +2,9 @@ server:
   port: 8081
 
 spring:
+  threads:
+    virtual:
+      enabled: true
   application:
     name: trading-engine-service
   datasource:
@@ -30,4 +33,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

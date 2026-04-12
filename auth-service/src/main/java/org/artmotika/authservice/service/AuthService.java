@@ -43,6 +43,22 @@ public class AuthService {
         throw new RuntimeException("Invalid credentials");
     }
 
+    public String loginViaEsia(String code) {
+        // MOCK: In reality, we'd exchange 'code' for an access token via ESIA API
+        String mockWallet = "ESIA_" + UUID.randomUUID().toString().substring(0, 8);
+        User user = User.builder()
+                .id(UUID.randomUUID().toString())
+                .walletAddress(mockWallet)
+                .kycStatus("APPROVED") // ESIA users are pre-verified
+                .isQualified(false)    // Default to retail investor
+                .amlRiskScore(0)
+                .password(passwordEncoder.encode("ESIA_OAUTH_" + code))
+                .build();
+        userRepository.save(user);
+        kafkaTemplate.send("users.registered", user.getId());
+        return generateToken(user);
+    }
+
     private String generateToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getId())

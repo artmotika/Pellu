@@ -16,4 +16,5 @@ public class User {
     private String kycStatus; // PENDING, APPROVED, REJECTED
     private Integer amlRiskScore;
     private String password; // hashed
+    private boolean isQualified; // true = Qualified Investor
 }
