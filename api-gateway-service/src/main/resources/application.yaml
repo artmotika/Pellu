@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: api-gateway-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/platform
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     producer:

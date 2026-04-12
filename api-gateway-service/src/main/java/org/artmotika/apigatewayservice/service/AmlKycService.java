@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.apigatewayservice.exception.AmlViolationException;
 import org.artmotika.apigatewayservice.exception.KycNotVerifiedException;
+import org.artmotika.apigatewayservice.model.User;
+import org.artmotika.apigatewayservice.repo.UserRepository;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
@@ -18,12 +20,15 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class AmlKycService {
     private final KafkaTemplate<String, OrderRequestDto> kafkaTemplate;
+    private final UserRepository userRepository;
     private final Map<String, List<Long>> userOrderTimestamps = new ConcurrentHashMap<>();
     private final Map<String, Integer> userAmlScores = new ConcurrentHashMap<>();
-    private final Map<String, String> mockUserKycDb = Map.of("user-1", "APPROVED", "user-2", "PENDING"); // Mock DB
 
     public void processOrder(OrderRequestDto order) {
-        if (!"APPROVED".equals(mockUserKycDb.getOrDefault(order.getUserId(), "PENDING"))) {
+        User user = userRepository.findById(order.getUserId())
+                .orElseThrow(() -> new KycNotVerifiedException("User not found"));
+
+        if (!"APPROVED".equals(user.getKycStatus())) {
             throw new KycNotVerifiedException("User KYC not approved");
         }
 
@@ -34,7 +39,8 @@ public class AmlKycService {
         times.add(now);
 
         if (times.size() > 5 || order.getAmount().compareTo(new BigDecimal("1000000")) > 0) {
-            userAmlScores.put(order.getUserId(), userAmlScores.getOrDefault(order.getUserId(), 0) + 50);
+            user.setAmlRiskScore(user.getAmlRiskScore() + 50);
+            userRepository.save(user);
             throw new AmlViolationException("AML Policy Violation: Volume/Frequency limit exceeded");
         }
 
