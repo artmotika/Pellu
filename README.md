@@ -55,3 +55,7 @@ Interactive documentation (Swagger UI) is available at:
 - Gateway: `http://localhost:8080/swagger-ui.html`
 - Engine: `http://localhost:8081/swagger-ui.html`
 - Auth: `http://localhost:8083/swagger-ui.html`
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
