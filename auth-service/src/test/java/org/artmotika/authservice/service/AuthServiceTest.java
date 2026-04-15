@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import org.artmotika.common.dto.KycStatus;
+
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,6 +49,7 @@ class AuthServiceTest {
                 .id("user-1")
                 .walletAddress("wallet123")
                 .password("hashed_pass")
+                .kycStatus(KycStatus.APPROVED)
                 .build();
         
         when(userRepository.findByWalletAddress("wallet123")).thenReturn(Optional.of(user));
@@ -62,6 +65,7 @@ class AuthServiceTest {
         User user = User.builder()
                 .walletAddress("wallet123")
                 .password("hashed_pass")
+                .kycStatus(KycStatus.PENDING)
                 .build();
         
         when(userRepository.findByWalletAddress("wallet123")).thenReturn(Optional.of(user));

@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 public class OrderRequestDto {
     String userId;
     String assetId;
-    String type;
+    OrderType type;
     BigDecimal amount;
     BigDecimal price;
 }

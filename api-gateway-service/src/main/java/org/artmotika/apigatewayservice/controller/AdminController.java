@@ -3,6 +3,8 @@ package org.artmotika.apigatewayservice.controller;
 import lombok.RequiredArgsConstructor;
 import org.artmotika.apigatewayservice.model.User;
 import org.artmotika.apigatewayservice.repo.UserRepository;
+import org.artmotika.common.dto.KycStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,30 +18,30 @@ public class AdminController {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @PostMapping("/kyc")
-    public String updateKyc(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> updateKyc(@RequestBody Map<String, Object> req) {
         String userId = (String) req.get("userId");
         boolean approved = (Boolean) req.get("approved");
         
         User user = userRepository.findById(userId).orElseThrow();
-        user.setKycStatus(approved ? "APPROVED" : "REJECTED");
+        user.setKycStatus(approved ? KycStatus.APPROVED : KycStatus.REJECTED);
         userRepository.save(user);
         
         kafkaTemplate.send("kyc.updated", Map.of("userId", userId, "approved", approved));
-        return "KYC Updated";
+        return ResponseEntity.ok("KYC Updated");
     }
 
     @PostMapping("/freeze")
-    public String freeze(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> freeze(@RequestBody Map<String, Object> req) {
         String userId = (String) req.get("userId");
         boolean freeze = (Boolean) req.get("freeze");
         
         kafkaTemplate.send("aml.frozen", Map.of("userId", userId, "freeze", freeze));
-        return "Freeze Command Sent";
+        return ResponseEntity.ok("Freeze Command Sent");
     }
 
     @PostMapping("/clawback")
-    public String clawback(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> clawback(@RequestBody Map<String, Object> req) {
         kafkaTemplate.send("admin.clawback", req);
-        return "Clawback Command Sent";
+        return ResponseEntity.ok("Clawback Command Sent");
     }
 }

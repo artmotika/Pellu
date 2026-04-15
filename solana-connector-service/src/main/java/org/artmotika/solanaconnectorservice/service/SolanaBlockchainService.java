@@ -38,9 +38,6 @@ public class SolanaBlockchainService {
     @Value("${solana.admin.private-key:}")
     private String adminPrivateKeyBase58;
 
-    @Value("${solana.mock-mode:true}")
-    private boolean mockMode;
-
     private RpcClient rpcClient;
     private final KafkaTemplate<String, ExecutionResultDto> kafkaTemplate;
     private final Executor virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -51,19 +48,13 @@ public class SolanaBlockchainService {
     @PostConstruct
     public void init() {
         this.programId = new PublicKey(programIdStr);
-        
-        if (mockMode) {
-            log.info("Solana Connector initialized in MOCK MODE. No live transactions will be sent.");
-            this.adminAccount = new Account(); // Random account for mock
+        log.info("Solana Connector initialized connecting to {}", rpcUrl);
+        this.rpcClient = new RpcClient(rpcUrl);
+        if (adminPrivateKeyBase58 != null && !adminPrivateKeyBase58.isEmpty()) {
+            this.adminAccount = new Account(Base58.decode(adminPrivateKeyBase58));
         } else {
-            log.info("Solana Connector initialized in LIVE MODE connecting to {}", rpcUrl);
-            this.rpcClient = new RpcClient(rpcUrl);
-            if (adminPrivateKeyBase58 != null && !adminPrivateKeyBase58.isEmpty()) {
-                this.adminAccount = new Account(Base58.decode(adminPrivateKeyBase58));
-            } else {
-                log.warn("No admin private key provided. Using random account (transactions will fail if SOL is needed).");
-                this.adminAccount = new Account();
-            }
+            log.warn("No admin private key provided. Using random account (transactions will fail if SOL is needed).");
+            this.adminAccount = new Account();
         }
     }
 
@@ -90,7 +81,7 @@ public class SolanaBlockchainService {
     public void registerUserOnChain(String userId) {
         CompletableFuture.runAsync(() -> {
             log.info("Registering User on Solana (Async): {}", userId);
-            byte[] discriminator = { (byte)0x8e, 0x6e, (byte)0x97, 0x01, (byte)0xd8, (byte)0xab, (byte)0xe9, 0x72 };
+            byte[] discriminator = { (byte)0x8e, (byte)0x6e, (byte)0x97, (byte)0x01, (byte)0xd8, (byte)0xab, (byte)0xe9, 0x72 };
             sendAndConfirm(new TransactionInstruction(programId, Collections.emptyList(), discriminator));
         }, virtualThreadExecutor);
     }
@@ -98,7 +89,7 @@ public class SolanaBlockchainService {
     @KafkaListener(topics = "kyc.updated", groupId = "solana-connector-group")
     public void updateKycOnChain(KycUpdateEventDto event) {
         log.info("Updating KYC on Solana for User: {} -> {}", event.getUserId(), event.isApproved());
-        byte[] discriminator = { (byte)0xcb, (byte)0xc6, (byte)0xb0, (byte)0x91, (byte)0xc4, 0x44, 0x33, 0x3e };
+        byte[] discriminator = { (byte)0xcb, (byte)0xc6, (byte)0xb0, (byte)0x91, (byte)0xc4, (byte)0x44, 0x33, 0x3e };
         ByteBuffer buffer = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put(discriminator);
         buffer.put(event.isApproved() ? (byte)1 : (byte)0);
@@ -118,7 +109,7 @@ public class SolanaBlockchainService {
     @KafkaListener(topics = "admin.clawback", groupId = "solana-connector-group")
     public void clawbackOnChain(ClawbackEventDto event) {
         log.info("Executing Clawback on Solana: {} -> {} (Amount: {})", event.getTargetWallet(), event.getDestinationWallet(), event.getAmount());
-        byte[] discriminator = { (byte)0xff, (byte)0xa8, 0x34, (byte)0x9d, 0x76, (byte)0xc1, (byte)0xf0, (byte)0xa7 };
+        byte[] discriminator = { (byte)0xff, (byte)0xa8, 0x34, (byte)0x9d, (byte)0x76, (byte)0xc1, (byte)0xf0, (byte)0xa7 };
         ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put(discriminator);
         buffer.putLong(event.getAmount());
@@ -137,11 +128,6 @@ public class SolanaBlockchainService {
     }
 
     private String sendAndConfirm(TransactionInstruction instr) {
-        if (mockMode) {
-            log.info("MOCK: Transaction instruction '{}' would be sent.", instr.getProgramId());
-            return "MOCK_TX_" + UUID.randomUUID().toString().substring(0, 16);
-        }
-
         try {
             Transaction tx = new Transaction();
             tx.addInstruction(instr);

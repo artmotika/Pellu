@@ -7,6 +7,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.http.ResponseEntity;
+
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,14 +26,14 @@ class AuthControllerTest {
     @Test
     void register_ShouldReturnToken() {
         when(authService.register("w1", "p1")).thenReturn("token123");
-        Map<String, String> result = authController.register(Map.of("wallet", "w1", "password", "p1"));
-        assertEquals("token123", result.get("token"));
+        ResponseEntity<Map<String, String>> result = authController.register(Map.of("wallet", "w1", "password", "p1"));
+        assertEquals("token123", result.getBody().get("token"));
     }
 
     @Test
     void login_ShouldReturnToken() {
         when(authService.login("w1", "p1")).thenReturn("token123");
-        Map<String, String> result = authController.login(Map.of("wallet", "w1", "password", "p1"));
-        assertEquals("token123", result.get("token"));
+        ResponseEntity<Map<String, String>> result = authController.login(Map.of("wallet", "w1", "password", "p1"));
+        assertEquals("token123", result.getBody().get("token"));
     }
 }

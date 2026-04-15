@@ -10,8 +10,10 @@ import java.time.LocalDateTime;
 public class CorporateAction {
     @Id private String id;
     @ManyToOne @JoinColumn(name = "asset_id") private Asset asset;
-    private String type; // DIVIDEND, COUPON
+    @Enumerated(EnumType.STRING)
+    private CorporateActionType type;
     private BigDecimal amountPerShare;
-    private String status; // PENDING, COMPLETED
+    @Enumerated(EnumType.STRING)
+    private CorporateActionStatus status;
     private LocalDateTime createdAt;
 }

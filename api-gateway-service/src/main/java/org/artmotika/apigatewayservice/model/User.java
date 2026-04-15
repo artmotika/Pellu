@@ -1,16 +1,16 @@
 package org.artmotika.apigatewayservice.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Data;
+import org.artmotika.common.dto.KycStatus;
 
 @Entity @Table(name = "users")
 @Data
 public class User {
     @Id private String id;
     private String walletAddress;
-    private String kycStatus;
+    @Enumerated(EnumType.STRING)
+    private KycStatus kycStatus;
     private Integer amlRiskScore;
     private boolean isQualified;
 }

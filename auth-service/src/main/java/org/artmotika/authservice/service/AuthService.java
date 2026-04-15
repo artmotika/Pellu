@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.artmotika.authservice.model.User;
 import org.artmotika.authservice.repo.UserRepository;
+import org.artmotika.common.dto.KycStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class AuthService {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .walletAddress(wallet)
-                .kycStatus("PENDING")
+                .kycStatus(KycStatus.PENDING)
                 .amlRiskScore(0)
                 .password(passwordEncoder.encode(password))
                 .build();
@@ -49,7 +50,7 @@ public class AuthService {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .walletAddress(mockWallet)
-                .kycStatus("APPROVED") // ESIA users are pre-verified
+                .kycStatus(KycStatus.APPROVED) // ESIA users are pre-verified
                 .isQualified(false)    // Default to retail investor
                 .amlRiskScore(0)
                 .password(passwordEncoder.encode("ESIA_OAUTH_" + code))

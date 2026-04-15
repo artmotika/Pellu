@@ -8,6 +8,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.http.ResponseEntity;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,9 +26,9 @@ class OrderControllerTest {
     @Test
     void submitOrder_ShouldCallService() {
         OrderRequestDto order = new OrderRequestDto();
-        String result = orderController.submitOrder(order);
+        ResponseEntity<String> response = orderController.submitOrder(order);
         
-        assertEquals("Order Accepted", result);
+        assertEquals("Order Accepted", response.getBody());
         verify(amlKycService, times(1)).processOrder(order);
     }
 }

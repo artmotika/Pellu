@@ -28,7 +28,7 @@ class SolanaBlockchainServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(solanaBlockchainService, "mockMode", true);
+        ReflectionTestUtils.setField(solanaBlockchainService, "rpcUrl", "https://api.devnet.solana.com");
         ReflectionTestUtils.setField(solanaBlockchainService, "programIdStr", "Dfa1111111111111111111111111111111111111111");
         solanaBlockchainService.init();
     }

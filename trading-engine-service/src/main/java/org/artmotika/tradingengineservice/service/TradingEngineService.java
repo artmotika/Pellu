@@ -39,7 +39,7 @@ public class TradingEngineService {
         order.setId(UUID.randomUUID().toString());
         order.setUser(userRepository.findById(dto.getUserId()).orElseThrow());
         order.setAsset(assetRepository.findById(dto.getAssetId()).orElseThrow());
-        order.setType(Order.OrderType.valueOf(dto.getType()));
+        order.setType(Order.OrderType.valueOf(dto.getType().name()));
         order.setAmount(dto.getAmount());
         order.setPrice(dto.getPrice());
         order.setStatus(Order.OrderStatus.PENDING);

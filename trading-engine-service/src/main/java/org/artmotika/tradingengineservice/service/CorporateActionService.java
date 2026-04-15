@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.CorporateAction;
+import org.artmotika.tradingengineservice.model.CorporateActionStatus;
+import org.artmotika.tradingengineservice.model.CorporateActionType;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
 import org.artmotika.tradingengineservice.repo.CorporateActionRepository;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -29,9 +31,9 @@ public class CorporateActionService {
         CorporateAction ca = new CorporateAction();
         ca.setId(UUID.randomUUID().toString());
         ca.setAsset(asset);
-        ca.setType("DIVIDEND");
+        ca.setType(CorporateActionType.DIVIDEND);
         ca.setAmountPerShare(amountPerShare);
-        ca.setStatus("PENDING");
+        ca.setStatus(CorporateActionStatus.PENDING);
         ca.setCreatedAt(LocalDateTime.now());
         corporateActionRepository.save(ca);
 
@@ -51,7 +53,7 @@ public class CorporateActionService {
             }
         });
 
-        ca.setStatus("COMPLETED");
+        ca.setStatus(CorporateActionStatus.COMPLETED);
         corporateActionRepository.save(ca);
     }
 }

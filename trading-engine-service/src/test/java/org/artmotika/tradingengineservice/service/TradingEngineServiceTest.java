@@ -16,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import org.artmotika.common.dto.OrderType;
+
 import java.math.BigDecimal;
 import java.util.Optional;
 
@@ -41,7 +43,7 @@ class TradingEngineServiceTest {
     @Test
     void consumeOrder_ShouldValidateAndSavePendingOrder() {
         OrderRequestDto dto = new OrderRequestDto();
-        dto.setUserId("u1"); dto.setAssetId("a1"); dto.setAmount(BigDecimal.ONE); dto.setPrice(BigDecimal.TEN); dto.setType("BUY");
+        dto.setUserId("u1"); dto.setAssetId("a1"); dto.setAmount(BigDecimal.ONE); dto.setPrice(BigDecimal.TEN); dto.setType(OrderType.BUY);
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(new User()));
         when(assetRepository.findById("a1")).thenReturn(Optional.of(new Asset()));

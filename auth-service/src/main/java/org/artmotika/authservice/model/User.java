@@ -1,19 +1,19 @@
 package org.artmotika.authservice.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.artmotika.common.dto.KycStatus;
 
 @Entity @Table(name = "users")
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class User {
     @Id private String id;
     private String walletAddress;
-    private String kycStatus; // PENDING, APPROVED, REJECTED
+    @Enumerated(EnumType.STRING)
+    private KycStatus kycStatus; 
     private Integer amlRiskScore;
     private String password; // hashed
     private boolean isQualified; // true = Qualified Investor
