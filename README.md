@@ -1,4 +1,6 @@
-# DFA Trading Platform - Master's Thesis Project
+# PelluChain - DFA Trading Platform
+
+PelluChain is a high-velocity Solana-based ecosystem for digital financial assets, delivering pellucid transparency and institutional-grade compliance through a unified, high-performance ledger.
 
 ## Architecture Overview
 
