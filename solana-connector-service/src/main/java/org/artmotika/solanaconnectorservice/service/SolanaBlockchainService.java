@@ -1,25 +1,25 @@
 package org.artmotika.solanaconnectorservice.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.artmotika.solanaconnectorservice.dto.*;
+import org.bitcoinj.core.Base58;
 import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.core.PublicKey;
 import org.p2p.solanaj.core.Transaction;
 import org.p2p.solanaj.core.TransactionInstruction;
 import org.p2p.solanaj.rpc.RpcClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -28,14 +28,44 @@ import java.util.concurrent.Executors;
 @RequiredArgsConstructor
 @Slf4j
 public class SolanaBlockchainService {
-    private final RpcClient rpcClient = new RpcClient("https://api.devnet.solana.com");
+
+    @Value("${solana.rpc.url:https://api.devnet.solana.com}")
+    private String rpcUrl;
+
+    @Value("${solana.program.id:Dfa1111111111111111111111111111111111111111}")
+    private String programIdStr;
+
+    @Value("${solana.admin.private-key:}")
+    private String adminPrivateKeyBase58;
+
+    @Value("${solana.mock-mode:true}")
+    private boolean mockMode;
+
+    private RpcClient rpcClient;
     private final KafkaTemplate<String, ExecutionResultDto> kafkaTemplate;
-    
-    // Using Virtual Threads for parallel RPC handling
     private final Executor virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
     
-    private final Account adminAccount = new Account(); 
-    private final PublicKey programId = new PublicKey("Dfa1111111111111111111111111111111111111111");
+    private Account adminAccount;
+    private PublicKey programId;
+
+    @PostConstruct
+    public void init() {
+        this.programId = new PublicKey(programIdStr);
+        
+        if (mockMode) {
+            log.info("Solana Connector initialized in MOCK MODE. No live transactions will be sent.");
+            this.adminAccount = new Account(); // Random account for mock
+        } else {
+            log.info("Solana Connector initialized in LIVE MODE connecting to {}", rpcUrl);
+            this.rpcClient = new RpcClient(rpcUrl);
+            if (adminPrivateKeyBase58 != null && !adminPrivateKeyBase58.isEmpty()) {
+                this.adminAccount = new Account(Base58.decode(adminPrivateKeyBase58));
+            } else {
+                log.warn("No admin private key provided. Using random account (transactions will fail if SOL is needed).");
+                this.adminAccount = new Account();
+            }
+        }
+    }
 
     @KafkaListener(topics = "orders.validated", groupId = "solana-connector-group")
     public void tradeDfa(ValidatedOrderEventDto event) {
@@ -98,9 +128,7 @@ public class SolanaBlockchainService {
     @KafkaListener(topics = "dividend.payout", groupId = "solana-connector-group")
     public void executeDividendPayout(Map<String, Object> event) {
         log.info("Executing Dividend Payout on Solana for User: {}", event.get("userId"));
-        // Instruction for a standard token transfer from the Platform Treasury to the User
-        // In a real Anchor program, this might be a specific 'distribute' instruction
-        byte[] discriminator = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }; // Placeholder
+        byte[] discriminator = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
         long amount = ((Number) event.get("amount")).longValue();
         ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put(discriminator);
@@ -109,12 +137,17 @@ public class SolanaBlockchainService {
     }
 
     private String sendAndConfirm(TransactionInstruction instr) {
+        if (mockMode) {
+            log.info("MOCK: Transaction instruction '{}' would be sent.", instr.getProgramId());
+            return "MOCK_TX_" + UUID.randomUUID().toString().substring(0, 16);
+        }
+
         try {
             Transaction tx = new Transaction();
             tx.addInstruction(instr);
             String sig = rpcClient.getApi().sendTransaction(tx, adminAccount);
             
-            // Simplified confirm for unit test execution environment
+            // Wait for confirmation (simplified for template)
             Thread.sleep(1000); 
             return sig;
         } catch (Exception e) {
