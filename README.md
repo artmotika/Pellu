@@ -2,6 +2,8 @@
 
 Pellu is a next-generation platform for issuing and trading Digital Financial Assets (DFA) using the Solana blockchain and a microservices architecture.
 
+![PelluChain Logo](media/logo_anime.gif)
+
 ## Key Features
 
 - **Full Asset Lifecycle**: Create assets with legal backing (`legalDocHash`), manage IPO stages (Planned, Active), and enable secondary trading.
