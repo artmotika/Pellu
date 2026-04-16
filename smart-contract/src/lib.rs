@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("DfaPlatform22222222222222222222222222222222");
+declare_id!("6p61939h6p888888888888888888888888888888");
 
 #[program]
 pub mod dfa_advanced_platform {

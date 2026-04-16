@@ -137,7 +137,7 @@ fn test_voting_invalid_option_index() {
 
 #[test]
 fn test_voting_finalization_flag() {
-    let mut voting = Voting {
+    let voting = Voting {
         asset_registry: Pubkey::new_unique(),
         title: "Finalize Test".to_string(),
         options_count: 2u8,
