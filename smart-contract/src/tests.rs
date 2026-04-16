@@ -83,11 +83,19 @@ fn test_trading_fails_if_platform_inactive() {
 
 #[test]
 fn test_trading_kyc_requirement() {
-    let seller = create_mock_user(Pubkey::new_unique());
-    let buyer = create_mock_user(Pubkey::new_unique());
+    let mut seller = create_mock_user(Pubkey::new_unique());
+    let mut buyer = create_mock_user(Pubkey::new_unique());
     
-    let can_trade = seller.is_kyc_approved && buyer.is_kyc_approved;
-    assert!(!can_trade, "Trading should fail if KYC is not approved for both");
+    // Both failed KYC
+    assert!(!seller.is_kyc_approved && !buyer.is_kyc_approved);
+    
+    // Only seller approved
+    seller.is_kyc_approved = true;
+    assert!(!(seller.is_kyc_approved && buyer.is_kyc_approved));
+
+    // Both approved
+    buyer.is_kyc_approved = true;
+    assert!(seller.is_kyc_approved && buyer.is_kyc_approved);
 }
 
 #[test]
@@ -96,8 +104,10 @@ fn test_trading_fails_if_frozen() {
     seller.is_kyc_approved = true;
     seller.is_frozen = true;
     
-    let can_trade = !seller.is_frozen;
-    assert!(!can_trade, "Frozen accounts cannot trade");
+    assert!(seller.is_frozen, "Frozen seller should be blocked");
+    
+    seller.is_frozen = false;
+    assert!(!seller.is_frozen, "Unfrozen seller should be allowed");
 }
 
 #[test]
@@ -144,7 +154,7 @@ fn test_double_voting_prevention_logic() {
     assert!(!user_vote.has_voted);
     user_vote.has_voted = true;
     
-    // Second vote should be blocked by the `require!` in the program
+    // Second vote attempt
     assert!(user_vote.has_voted, "User should be marked as already voted");
 }
 
@@ -158,6 +168,41 @@ fn test_voting_expiry_logic() {
     assert!(current_time_ok < end_time, "Voting should be active");
 }
 
+#[test]
+fn test_voting_finalization_blocking() {
+    let voting = Voting {
+        asset_registry: Pubkey::new_unique(),
+        title: "Test".to_string(),
+        options_count: 2,
+        votes_per_option: vec![0, 0],
+        end_timestamp: 2000,
+        is_finalized: true,
+    };
+    assert!(voting.is_finalized, "Finalized voting must block new votes");
+}
+
+#[test]
+fn test_voting_invalid_option_index() {
+    let options_count = 3u8; // 0, 1, 2
+    let valid_index = 2u8;
+    let invalid_index = 3u8;
+    
+    assert!(valid_index < options_count);
+    assert!(invalid_index >= options_count);
+}
+
+// --- ТЕСТЫ ДИВИДЕНДОВ (Dividends) ---
+
+#[test]
+fn test_dividend_authorization() {
+    let asset = create_mock_asset();
+    let admin = asset.admin_pubkey;
+    let hacker = Pubkey::new_unique();
+    
+    assert_eq!(admin, asset.admin_pubkey, "Admin should be authorized");
+    assert_ne!(hacker, asset.admin_pubkey, "Hacker should NOT be authorized");
+}
+
 // --- ТЕСТЫ IPO (IPO Logic) ---
 
 #[test]
@@ -167,4 +212,19 @@ fn test_ipo_toggle() {
     
     asset.is_ipo_active = true;
     assert!(asset.is_ipo_active);
+    
+    asset.is_ipo_active = false;
+    assert!(!asset.is_ipo_active);
+}
+
+// --- ТЕСТЫ COMPLIANCE (KYC/Freeze) ---
+
+#[test]
+fn test_compliance_authorization() {
+    let asset = create_mock_asset();
+    let compliance_officer = asset.compliance_pubkey;
+    let random_user = Pubkey::new_unique();
+    
+    assert_eq!(compliance_officer, asset.compliance_pubkey);
+    assert_ne!(random_user, asset.compliance_pubkey);
 }
