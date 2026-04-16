@@ -131,6 +131,9 @@ pub mod dfa_advanced_platform {
     }
 }
 
+// Включаем модуль тестов
+mod tests;
+
 #[derive(Accounts)]
 #[instruction(asset_id: String)]
 pub struct InitializePlatform<'info> {
