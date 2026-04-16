@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("6p61939h6p888888888888888888888888888888");
+declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod dfa_advanced_platform {
@@ -17,7 +17,7 @@ pub mod dfa_advanced_platform {
     ) -> Result<()> {
         let registry = &mut ctx.accounts.asset_registry;
         registry.admin_pubkey = *ctx.accounts.admin.key;
-        registry.compliance_pubkey = *ctx.accounts.admin.key; 
+        registry.compliance_pubkey = *ctx.accounts.admin.key;
         registry.mint = ctx.accounts.mint.key();
         registry.asset_id = asset_id;
         registry.asset_name = asset_name;
@@ -81,8 +81,8 @@ pub mod dfa_advanced_platform {
     pub fn register_user(ctx: Context<RegisterUser>) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         user_account.owner_pubkey = *ctx.accounts.user_wallet.key;
-        user_account.is_kyc_approved = false; 
-        user_account.is_frozen = false;       
+        user_account.is_kyc_approved = false;
+        user_account.is_frozen = false;
         Ok(())
     }
 
@@ -126,8 +126,14 @@ pub mod dfa_advanced_platform {
             to: ctx.accounts.destination_token_account.to_account_info(),
             authority: ctx.accounts.platform_authority.to_account_info(),
         };
-        let seeds = &[b"platform_auth", &[ctx.bumps.platform_authority]];
+
+        let bump = ctx.bumps.platform_authority;
+        let seeds = &[
+            b"platform_auth".as_ref(),
+            &[bump],
+        ];
         let signer = &[&seeds[..]];
+
         token::transfer(CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer), amount)?;
         Ok(())
     }
@@ -157,7 +163,6 @@ pub struct AdminAction<'info> {
 #[derive(Accounts)]
 #[instruction(action_id: String)]
 pub struct InitializeVoting<'info> {
-    // Увеличено место для votes_per_option (4 + 255 * 8 = 2044)
     #[account(init, payer = admin, space = 8 + 32 + 64 + 1 + 2044 + 8 + 1, seeds = [b"voting", action_id.as_bytes()], bump)]
     pub voting_account: Account<'info, Voting>,
     pub asset_registry: Account<'info, AssetRegistry>,
