@@ -2,7 +2,6 @@ package org.artmotika.tradingengineservice.service;
 
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
-import org.artmotika.tradingengineservice.model.User;
 import org.artmotika.tradingengineservice.model.UserBalance;
 import org.artmotika.tradingengineservice.repo.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
@@ -14,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,11 +23,10 @@ class BalanceServiceTest {
 
     @Test
     void updateBalanceOnExecution_ShouldIncreaseBalanceOnBuy() {
-        User user = new User(); user.setId("u1");
         Asset asset = new Asset(); asset.setId("a1");
         
         Order order = new Order();
-        order.setUser(user);
+        order.setUserId("u1");
         order.setAsset(asset);
         order.setType(Order.OrderType.BUY);
         order.setAmount(new BigDecimal("10"));
@@ -41,24 +38,24 @@ class BalanceServiceTest {
 
         verify(balanceRepository, times(1)).save(argThat(balance -> 
             balance.getAmount().equals(new BigDecimal("10")) &&
-            balance.getWeightedAverageCost().equals(new BigDecimal("100.0000"))
+            balance.getWeightedAverageCost().equals(new BigDecimal("100.0000")) &&
+            balance.getUserId().equals("u1")
         ));
     }
 
     @Test
     void updateBalanceOnExecution_ShouldUpdateWacOnSecondBuy() {
-        User user = new User(); user.setId("u1");
         Asset asset = new Asset(); asset.setId("a1");
         
         UserBalance existing = new UserBalance();
         existing.setId("u1:a1");
-        existing.setUser(user);
+        existing.setUserId("u1");
         existing.setAsset(asset);
         existing.setAmount(new BigDecimal("10"));
         existing.setWeightedAverageCost(new BigDecimal("100"));
 
         Order order = new Order();
-        order.setUser(user);
+        order.setUserId("u1");
         order.setAsset(asset);
         order.setType(Order.OrderType.BUY);
         order.setAmount(new BigDecimal("10"));
@@ -77,16 +74,16 @@ class BalanceServiceTest {
 
     @Test
     void updateBalanceOnExecution_ShouldDecreaseBalanceOnSell() {
-        User user = new User(); user.setId("u1");
         Asset asset = new Asset(); asset.setId("a1");
         
         UserBalance existing = new UserBalance();
         existing.setId("u1:a1");
+        existing.setUserId("u1");
         existing.setAmount(new BigDecimal("30"));
         existing.setWeightedAverageCost(new BigDecimal("100"));
 
         Order order = new Order();
-        order.setUser(user);
+        order.setUserId("u1");
         order.setAsset(asset);
         order.setType(Order.OrderType.SELL);
         order.setAmount(new BigDecimal("10"));

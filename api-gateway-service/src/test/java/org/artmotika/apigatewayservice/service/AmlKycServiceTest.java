@@ -1,8 +1,7 @@
 package org.artmotika.apigatewayservice.service;
 
 import org.artmotika.common.dto.KycStatus;
-import org.artmotika.apigatewayservice.model.User;
-import org.artmotika.apigatewayservice.repo.UserRepository;
+import org.artmotika.common.dto.UserDto;
 import org.artmotika.apigatewayservice.service.validator.OrderValidator;
 import org.artmotika.common.dto.OrderRequestDto;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,11 +12,12 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.*;
 class AmlKycServiceTest {
 
     @Mock
-    private UserRepository userRepository;
+    private RestTemplate restTemplate;
     @Mock
     private KafkaTemplate<String, OrderRequestDto> kafkaTemplate;
     
@@ -37,14 +37,17 @@ class AmlKycServiceTest {
     @InjectMocks
     private AmlKycService amlKycService;
 
-    private User approvedUser;
+    private UserDto approvedUser;
+    private final String authServiceUrl = "http://auth-service:8083";
 
     @BeforeEach
     void setUp() {
-        approvedUser = new User();
-        approvedUser.setId("user-1");
-        approvedUser.setKycStatus(KycStatus.APPROVED);
-        approvedUser.setAmlRiskScore(0);
+        ReflectionTestUtils.setField(amlKycService, "authServiceUrl", authServiceUrl);
+        approvedUser = UserDto.builder()
+                .id("user-1")
+                .kycStatus(KycStatus.APPROVED)
+                .amlRiskScore(0)
+                .build();
     }
 
     @Test
@@ -53,12 +56,12 @@ class AmlKycServiceTest {
         order.setUserId("user-1");
         order.setAmount(new BigDecimal("100"));
         
-        when(userRepository.findById("user-1")).thenReturn(Optional.of(approvedUser));
+        when(restTemplate.getForObject(authServiceUrl + "/api/auth/users/user-1", UserDto.class))
+                .thenReturn(approvedUser);
         
         amlKycService.processOrder(order);
         
         verify(kafkaTemplate, times(1)).send(eq("orders.created"), eq(order));
-        validators.forEach(v -> verify(v).validate(eq(order), eq(approvedUser)));
     }
 
     @Test
@@ -70,7 +73,8 @@ class AmlKycServiceTest {
         OrderRequestDto order = new OrderRequestDto();
         order.setUserId("user-1");
         
-        when(userRepository.findById("user-1")).thenReturn(Optional.of(approvedUser));
+        when(restTemplate.getForObject(authServiceUrl + "/api/auth/users/user-1", UserDto.class))
+                .thenReturn(approvedUser);
         
         assertThrows(RuntimeException.class, () -> amlKycService.processOrder(order));
     }

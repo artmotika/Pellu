@@ -7,11 +7,9 @@ import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
-import org.artmotika.tradingengineservice.model.User;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
 import org.artmotika.tradingengineservice.repo.OrderRepository;
 import org.artmotika.tradingengineservice.repo.TradeLedgerRepository;
-import org.artmotika.tradingengineservice.repo.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -34,7 +32,6 @@ class TradingEngineServiceTest {
 
     @Mock private OrderRepository orderRepository;
     @Mock private TradeLedgerRepository ledgerRepository;
-    @Mock private UserRepository userRepository;
     @Mock private AssetRepository assetRepository;
     @Mock private KafkaTemplate<String, Object> kafkaTemplate;
     @Mock private VolatilityCheckService volatilityCheckService;
@@ -49,7 +46,7 @@ class TradingEngineServiceTest {
         AssetCreatedEventDto event = new AssetCreatedEventDto();
         event.setId("a1");
         event.setName("Gold");
-        event.setTotalSupply(1000);
+        event.setTotalSupply(1000L);
         event.setType(AssetType.COMMODITY);
         event.setStatus(AssetStatus.IPO_PLANNED);
         event.setIpoPrice(BigDecimal.TEN);
@@ -81,14 +78,15 @@ class TradingEngineServiceTest {
         OrderRequestDto dto = new OrderRequestDto();
         dto.setUserId("u1"); dto.setAssetId("a1"); dto.setAmount(BigDecimal.ONE); dto.setPrice(BigDecimal.TEN); dto.setType(OrderType.BUY);
 
-        when(userRepository.findById("u1")).thenReturn(Optional.of(new User()));
         when(assetRepository.findById("a1")).thenReturn(Optional.of(new Asset()));
 
         tradingEngineService.consumeOrder(dto);
 
         verify(volatilityCheckService).validatePrice("a1", BigDecimal.TEN);
         verify(orderRepository, times(1)).save(argThat(order -> 
-            order.getStatus() == Order.OrderStatus.PENDING && order.getPrice().equals(BigDecimal.TEN)
+            order.getStatus() == Order.OrderStatus.PENDING && 
+            order.getPrice().equals(BigDecimal.TEN) &&
+            order.getUserId().equals("u1")
         ));
         verify(kafkaTemplate, times(1)).send(eq("orders.validated"), any());
     }
@@ -100,7 +98,7 @@ class TradingEngineServiceTest {
         result.setTxHash("hash123");
 
         Asset asset = new Asset(); asset.setId("a1");
-        Order order = new Order(); order.setId("o1"); order.setPrice(BigDecimal.TEN); order.setAsset(asset);
+        Order order = new Order(); order.setId("o1"); order.setPrice(BigDecimal.TEN); order.setAsset(asset); order.setUserId("u1");
 
         when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
 

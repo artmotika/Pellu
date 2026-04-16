@@ -2,7 +2,6 @@ package org.artmotika.tradingengineservice.service;
 
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
-import org.artmotika.tradingengineservice.model.User;
 import org.artmotika.tradingengineservice.model.UserBalance;
 import org.artmotika.tradingengineservice.repo.TaxLedgerRepository;
 import org.junit.jupiter.api.Test;
@@ -30,12 +29,11 @@ class TaxAgentServiceTest {
     void processTransactionTax_ShouldCalculateTaxForSellWithGain() {
         ReflectionTestUtils.setField(taxAgentService, "defaultTaxRate", new BigDecimal("0.13"));
 
-        User user = new User(); user.setId("u1");
         Asset asset = new Asset(); asset.setId("a1");
         
         Order order = new Order();
         order.setId("o1");
-        order.setUser(user);
+        order.setUserId("u1");
         order.setAsset(asset);
         order.setType(Order.OrderType.SELL);
         order.setAmount(new BigDecimal("10"));
@@ -50,7 +48,8 @@ class TaxAgentServiceTest {
 
         // Gain per unit: 150 - 100 = 50. Total gain: 50 * 10 = 500. Tax: 500 * 0.13 = 65.
         verify(taxLedgerRepository, times(1)).save(argThat(tax -> 
-            tax.getTaxAmount().compareTo(new BigDecimal("65.0000")) == 0
+            tax.getTaxAmount().compareTo(new BigDecimal("65.0000")) == 0 &&
+            tax.getUserId().equals("u1")
         ));
     }
 
@@ -58,12 +57,11 @@ class TaxAgentServiceTest {
     void processTransactionTax_ShouldNotCalculateTaxIfNoGain() {
         ReflectionTestUtils.setField(taxAgentService, "defaultTaxRate", new BigDecimal("0.13"));
 
-        User user = new User(); user.setId("u1");
         Asset asset = new Asset(); asset.setId("a1");
         
         Order order = new Order();
         order.setId("o1");
-        order.setUser(user);
+        order.setUserId("u1");
         order.setAsset(asset);
         order.setType(Order.OrderType.SELL);
         order.setAmount(new BigDecimal("10"));

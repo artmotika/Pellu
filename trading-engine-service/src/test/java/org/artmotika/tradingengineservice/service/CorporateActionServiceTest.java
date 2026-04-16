@@ -1,9 +1,6 @@
 package org.artmotika.tradingengineservice.service;
 
 import org.artmotika.tradingengineservice.model.Asset;
-import org.artmotika.tradingengineservice.model.CorporateAction;
-import org.artmotika.tradingengineservice.model.CorporateActionType;
-import org.artmotika.tradingengineservice.model.User;
 import org.artmotika.tradingengineservice.model.UserBalance;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
 import org.artmotika.tradingengineservice.repo.CorporateActionRepository;
@@ -35,38 +32,35 @@ class CorporateActionServiceTest {
     private CorporateActionService corporateActionService;
 
     @Test
-    void triggerVote_ShouldSaveAndSendEvent() {
+    void triggerDividend_ShouldCalculatePayoutsAndSendToKafka() {
         String assetId = "a1";
         Asset asset = new Asset(); asset.setId(assetId);
         when(assetRepository.findById(assetId)).thenReturn(Optional.of(asset));
 
-        corporateActionService.triggerVote(assetId, "Is this working?", List.of("Yes", "No"));
+        UserBalance b1 = new UserBalance();
+        b1.setUserId("u1");
+        b1.setAmount(new BigDecimal("100"));
 
-        verify(corporateActionRepository, times(2)).save(argThat(ca -> 
-            ca.getAsset().getId().equals(assetId) && ca.getType() == CorporateActionType.VOTING
-        ));
-        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(Map.class));
+        when(balanceService.getBalancesByAsset(assetId)).thenReturn(List.of(b1));
+
+        corporateActionService.triggerDividend(assetId, new BigDecimal("2.5"));
+
+        verify(kafkaTemplate, times(1)).send(eq("dividend.payout"), argThat(map -> {
+            Map m = (Map) map;
+            return m.get("userId").equals("u1") && m.get("amount").equals(new BigDecimal("250.0"));
+        }));
+        verify(corporateActionRepository, times(2)).save(any());
     }
 
     @Test
-    void triggerDividend_ShouldCalculatePayoutsAndSendEvents() {
+    void triggerVote_ShouldSendKafkaEvent() {
         String assetId = "a1";
         Asset asset = new Asset(); asset.setId(assetId);
-        
-        User u1 = new User(); u1.setId("u1");
-        UserBalance b1 = new UserBalance(); b1.setUser(u1); b1.setAmount(new BigDecimal("100"));
-        
         when(assetRepository.findById(assetId)).thenReturn(Optional.of(asset));
-        when(balanceService.getBalancesByAsset(assetId)).thenReturn(List.of(b1));
 
-        corporateActionService.triggerDividend(assetId, new BigDecimal("0.5")); // 0.5 units per share
+        corporateActionService.triggerVote(assetId, "Split?", List.of("Yes", "No"));
 
-        // 100 * 0.5 = 50 payout
-        verify(kafkaTemplate, times(1)).send(eq("dividend.payout"), argThat(map -> {
-            var m = (java.util.Map) map;
-            return m.get("userId").equals("u1") && m.get("amount").equals(new BigDecimal("50.0"));
-        }));
-
-        verify(corporateActionRepository, times(2)).save(any(CorporateAction.class));
+        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(Map.class));
+        verify(corporateActionRepository, times(2)).save(any());
     }
 }

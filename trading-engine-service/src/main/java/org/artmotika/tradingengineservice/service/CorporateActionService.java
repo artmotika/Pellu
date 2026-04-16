@@ -43,9 +43,9 @@ public class CorporateActionService {
         balances.forEach(balance -> {
             if (balance.getAmount().compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal payout = balance.getAmount().multiply(amountPerShare);
-                log.info("Triggering Dividend Payout for User {}: {} units", balance.getUser().getId(), payout);
+                log.info("Triggering Dividend Payout for User {}: {} units", balance.getUserId(), payout);
                 kafkaTemplate.send("dividend.payout", Map.of(
-                    "userId", balance.getUser().getId(),
+                    "userId", balance.getUserId(),
                     "assetId", assetId,
                     "amount", payout,
                     "actionId", ca.getId()

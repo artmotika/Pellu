@@ -64,7 +64,7 @@ public class BankReportService {
                .append(t.getExecutionPrice()).append(",")
                .append(t.getTimestamp()).append(",")
                .append(t.getOrder().getAsset().getId()).append(",")
-               .append(t.getOrder().getUser().getId()).append(",")
+               .append(t.getOrder().getUserId()).append(",")
                .append(t.getOrder().getType()).append("\n");
         }
         return csv.toString();
