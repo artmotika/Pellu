@@ -1,4 +1,4 @@
-# Pellu: Advanced DFA Platform on Solana
+# Pellu: Advanced DFA Platform on Solana <img src="media/solana-sol-logo.png" width="40" height="40" align="top" alt="Solana Logo">
 
 Pellu is a next-generation platform for issuing and trading Digital Financial Assets (DFA) using the Solana blockchain and a microservices architecture.
 
