@@ -61,14 +61,20 @@ pub mod dfa_advanced_platform {
         require!(option_index < voting.options_count, CustomError::InvalidOption);
         require!(ctx.accounts.user_account.is_kyc_approved, CustomError::KycNotApproved);
         require!(ctx.accounts.user_token_account.mint == ctx.accounts.asset_registry.mint, CustomError::WrongMint);
+        require!(ctx.accounts.user_vote_record.has_voted == false, CustomError::AlreadyVoted);
 
         let weight = ctx.accounts.user_token_account.amount;
+        require!(weight > 0, CustomError::NoTokens);
+
         voting.votes_per_option[option_index as usize] += weight;
+        ctx.accounts.user_vote_record.has_voted = true;
 
         Ok(())
     }
 
     pub fn distribute_dividend(ctx: Context<DistributeDividend>, amount: u64) -> Result<()> {
+        require!(ctx.accounts.admin.key() == ctx.accounts.asset_registry.admin_pubkey, CustomError::Unauthorized);
+        
         let cpi_accounts = Transfer {
             from: ctx.accounts.source_token_account.to_account_info(),
             to: ctx.accounts.user_token_account.to_account_info(),
@@ -111,10 +117,15 @@ pub mod dfa_advanced_platform {
         require!(!ctx.accounts.seller_account.is_frozen, CustomError::AccountFrozen);
         require!(!ctx.accounts.buyer_account.is_frozen, CustomError::AccountFrozen);
 
+        // Allow either seller OR admin to authorize the trade
+        let is_admin = ctx.accounts.authority.key() == registry.admin_pubkey;
+        let is_seller = ctx.accounts.authority.key() == ctx.accounts.seller_account.owner_pubkey;
+        require!(is_admin || is_seller, CustomError::Unauthorized);
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.seller_token_account.to_account_info(),
             to: ctx.accounts.buyer_token_account.to_account_info(),
-            authority: ctx.accounts.seller.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
         };
         token::transfer(CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts), amount)?;
         Ok(())
@@ -139,14 +150,13 @@ pub mod dfa_advanced_platform {
     }
 }
 
-// Включаем модуль тестов только при тестировании
 #[cfg(test)]
 mod tests;
 
 #[derive(Accounts)]
 #[instruction(asset_id: String)]
 pub struct InitializePlatform<'info> {
-    #[account(init, payer = admin, space = 8 + 32 + 32 + 32 + 64 + 64 + 8 + 64 + 8 + 1 + 1, seeds = [b"registry", asset_id.as_bytes()], bump)]
+    #[account(init, payer = admin, space = 8 + 32 + 32 + 32 + 64 + 64 + 8 + 128 + 8 + 1 + 1, seeds = [b"registry", asset_id.as_bytes()], bump)]
     pub asset_registry: Account<'info, AssetRegistry>,
     pub mint: Account<'info, Mint>,
     #[account(mut)] pub admin: Signer<'info>,
@@ -163,7 +173,7 @@ pub struct AdminAction<'info> {
 #[derive(Accounts)]
 #[instruction(action_id: String)]
 pub struct InitializeVoting<'info> {
-    #[account(init, payer = admin, space = 8 + 32 + 64 + 1 + 2044 + 8 + 1, seeds = [b"voting", action_id.as_bytes()], bump)]
+    #[account(init, payer = admin, space = 8 + 32 + 128 + 1 + 2044 + 8 + 1, seeds = [b"voting", action_id.as_bytes()], bump)]
     pub voting_account: Account<'info, Voting>,
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(mut)] pub admin: Signer<'info>,
@@ -176,12 +186,16 @@ pub struct CastVote<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(seeds = [b"user", user_wallet.key().as_ref()], bump)]
     pub user_account: Account<'info, UserAccount>,
+    #[account(init, payer = user_wallet, space = 8 + 1, seeds = [b"vote_record", voting_account.key().as_ref(), user_wallet.key().as_ref()], bump)]
+    pub user_vote_record: Account<'info, UserVote>,
     pub user_token_account: Account<'info, TokenAccount>,
-    pub user_wallet: Signer<'info>,
+    #[account(mut)] pub user_wallet: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct DistributeDividend<'info> {
+    pub asset_registry: Account<'info, AssetRegistry>,
     #[account(mut)] pub source_token_account: Account<'info, TokenAccount>,
     #[account(mut)] pub user_token_account: Account<'info, TokenAccount>,
     pub admin: Signer<'info>,
@@ -210,14 +224,15 @@ pub struct ComplianceAction<'info> {
 #[derive(Accounts)]
 pub struct TradeDfa<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
-    #[account(seeds = [b"user", seller.key().as_ref()], bump)]
+    #[account(seeds = [b"user", seller_wallet.key().as_ref()], bump)]
     pub seller_account: Account<'info, UserAccount>,
     #[account(seeds = [b"user", buyer_wallet.key().as_ref()], bump)]
     pub buyer_account: Account<'info, UserAccount>,
     pub buyer_wallet: SystemAccount<'info>,
+    pub seller_wallet: SystemAccount<'info>,
     #[account(mut)] pub seller_token_account: Account<'info, TokenAccount>,
     #[account(mut)] pub buyer_token_account: Account<'info, TokenAccount>,
-    pub seller: Signer<'info>,
+    pub authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -264,6 +279,11 @@ pub struct UserAccount {
     pub is_frozen: bool
 }
 
+#[account]
+pub struct UserVote {
+    pub has_voted: bool,
+}
+
 #[error_code]
 pub enum CustomError {
     #[msg("Wrong Mint")] WrongMint,
@@ -274,4 +294,7 @@ pub enum CustomError {
     #[msg("Voting ended")] VotingEnded,
     #[msg("Voting finalized")] VotingFinalized,
     #[msg("Invalid option")] InvalidOption,
+    #[msg("Already voted")] AlreadyVoted,
+    #[msg("No tokens to vote")] NoTokens,
+    #[msg("Unauthorized")] Unauthorized,
 }

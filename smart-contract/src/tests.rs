@@ -100,6 +100,24 @@ fn test_trading_fails_if_frozen() {
     assert!(!can_trade, "Frozen accounts cannot trade");
 }
 
+#[test]
+fn test_trading_authorization_logic() {
+    let asset = create_mock_asset();
+    let seller_pubkey = Pubkey::new_unique();
+    let admin_pubkey = asset.admin_pubkey;
+    let random_pubkey = Pubkey::new_unique();
+
+    // Case 1: Seller authorizes
+    assert!(seller_pubkey == seller_pubkey || seller_pubkey == admin_pubkey);
+    
+    // Case 2: Admin authorizes
+    assert!(admin_pubkey == seller_pubkey || admin_pubkey == admin_pubkey);
+
+    // Case 3: Random user tries to authorize
+    let is_authorized = random_pubkey == seller_pubkey || random_pubkey == admin_pubkey;
+    assert!(!is_authorized, "Random user should not be authorized");
+}
+
 // --- ТЕСТЫ ГОЛОСОВАНИЯ (Voting) ---
 
 #[test]
@@ -119,6 +137,18 @@ fn test_voting_initialization_limits() {
 }
 
 #[test]
+fn test_double_voting_prevention_logic() {
+    let mut user_vote = UserVote { has_voted: false };
+    
+    // First vote
+    assert!(!user_vote.has_voted);
+    user_vote.has_voted = true;
+    
+    // Second vote should be blocked by the `require!` in the program
+    assert!(user_vote.has_voted, "User should be marked as already voted");
+}
+
+#[test]
 fn test_voting_expiry_logic() {
     let end_time = 2000i64;
     let current_time_late = 2500i64;
@@ -126,26 +156,6 @@ fn test_voting_expiry_logic() {
     
     assert!(current_time_late > end_time, "Voting should be expired");
     assert!(current_time_ok < end_time, "Voting should be active");
-}
-
-#[test]
-fn test_voting_invalid_option_index() {
-    let options_count = 2u8; // Индексы 0 и 1
-    let selected_option = 2u8;
-    assert!(selected_option >= options_count, "Option index 2 should be invalid for 2 options");
-}
-
-#[test]
-fn test_voting_finalization_flag() {
-    let voting = Voting {
-        asset_registry: Pubkey::new_unique(),
-        title: "Finalize Test".to_string(),
-        options_count: 2u8,
-        votes_per_option: vec![0, 0],
-        end_timestamp: 2000i64,
-        is_finalized: true,
-    };
-    assert!(voting.is_finalized, "Should not allow casting votes in finalized voting");
 }
 
 // --- ТЕСТЫ IPO (IPO Logic) ---

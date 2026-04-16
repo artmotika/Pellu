@@ -144,9 +144,10 @@ public class SolanaBlockchainService {
                 new AccountMeta(sellerAccountPda, false, false),
                 new AccountMeta(buyerAccountPda, false, false),
                 new AccountMeta(new PublicKey(event.getBuyerWallet()), false, false),
+                new AccountMeta(new PublicKey(event.getSellerWallet()), false, false),
                 new AccountMeta(new PublicKey(event.getSellerTokenAccount()), false, true),
                 new AccountMeta(new PublicKey(event.getBuyerTokenAccount()), false, true),
-                new AccountMeta(new PublicKey(event.getSellerWallet()), true, false),
+                new AccountMeta(adminAccount.getPublicKey(), true, false),
                 new AccountMeta(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), false, false)
             );
 
@@ -225,7 +226,11 @@ public class SolanaBlockchainService {
     public void executeDividendPayout(Map<String, Object> event) {
         log.info("Executing Dividend Payout on Solana");
         
+        String assetId = (String) event.get("assetId");
+        PublicKey assetRegistryPda = derivePda("registry", assetId);
+
         List<AccountMeta> keys = List.of(
+            new AccountMeta(assetRegistryPda, false, false),
             new AccountMeta(new PublicKey((String) event.get("sourceTokenAccount")), false, true),
             new AccountMeta(new PublicKey((String) event.get("userTokenAccount")), false, true),
             new AccountMeta(adminAccount.getPublicKey(), true, false),
