@@ -34,6 +34,10 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
+app:
+  platform:
+    token-account: ${PLATFORM_TOKEN_ACCOUNT:Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS}
+
 management:
   endpoints:
     web:

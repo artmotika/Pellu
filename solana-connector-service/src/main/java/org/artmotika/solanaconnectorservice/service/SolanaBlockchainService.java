@@ -3,13 +3,13 @@ package org.artmotika.solanaconnectorservice.service;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.artmotika.solanaconnectorservice.config.SolanaProperties;
 import org.artmotika.solanaconnectorservice.dto.*;
 import org.bitcoinj.core.Base58;
 import org.p2p.solanaj.core.*;
 import org.p2p.solanaj.rpc.RpcClient;
 import org.p2p.solanaj.rpc.types.AccountInfo;
 import org.p2p.solanaj.rpc.types.SignatureStatuses;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -27,65 +27,10 @@ import java.util.concurrent.Executors;
 @Slf4j
 public class SolanaBlockchainService {
 
-    @Value("${solana.rpc.url}")
-    private String rpcUrl;
-
-    @Value("${solana.program.id}")
-    private String programIdStr;
-
-    @Value("${solana.admin.private-key:}")
-    private String adminPrivateKeyBase58;
-
-    @Value("${solana.program.token-program-id}")
-    private String tokenProgramIdStr;
-
-    @Value("${solana.program.associated-token-program-id}")
-    private String associatedTokenProgramIdStr;
-
-    @Value("${solana.program.system-program-id}")
-    private String systemProgramIdStr;
-
-    @Value("${solana.pda.prefix.registry}")
-    private String registryPrefix;
-
-    @Value("${solana.pda.prefix.voting}")
-    private String votingPrefix;
-
-    @Value("${solana.pda.prefix.user}")
-    private String userPrefix;
-
-    @Value("${solana.pda.prefix.platform-auth}")
-    private String platformAuthPrefix;
-
-    @Value("${solana.pda.prefix.ata}")
-    private String ataPrefix;
-
-    @Value("${solana.discriminators.create-asset}")
-    private byte[] createAssetDiscriminator;
-
-    @Value("${solana.discriminators.toggle-ipo}")
-    private byte[] toggleIpoDiscriminator;
-
-    @Value("${solana.discriminators.start-voting}")
-    private byte[] startVotingDiscriminator;
-
-    @Value("${solana.discriminators.trade-dfa}")
-    private byte[] tradeDfaDiscriminator;
-
-    @Value("${solana.discriminators.register-user}")
-    private byte[] registerUserDiscriminator;
-
-    @Value("${solana.discriminators.update-kyc}")
-    private byte[] updateKycDiscriminator;
-
-    @Value("${solana.discriminators.clawback}")
-    private byte[] clawbackDiscriminator;
-
-    @Value("${solana.discriminators.dividend-payout}")
-    private byte[] dividendPayoutDiscriminator;
+    private final SolanaProperties solanaProperties;
+    private final KafkaTemplate<String, ExecutionResultDto> kafkaTemplate;
 
     private RpcClient rpcClient;
-    private final KafkaTemplate<String, ExecutionResultDto> kafkaTemplate;
     private final Executor virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
     
     private Account adminAccount;
@@ -98,48 +43,60 @@ public class SolanaBlockchainService {
 
     @PostConstruct
     public void init() {
-        this.programId = new PublicKey(programIdStr);
-        this.tokenProgramId = new PublicKey(tokenProgramIdStr);
-        this.associatedTokenProgramId = new PublicKey(associatedTokenProgramIdStr);
-        this.systemProgramId = new PublicKey(systemProgramIdStr);
+        this.programId = new PublicKey(solanaProperties.getProgram().getId());
+        this.tokenProgramId = new PublicKey(solanaProperties.getProgram().getTokenProgramId());
+        this.associatedTokenProgramId = new PublicKey(solanaProperties.getProgram().getAssociatedTokenProgramId());
+        this.systemProgramId = new PublicKey(solanaProperties.getProgram().getSystemProgramId());
 
-        log.info("Solana Connector initialized connecting to {}", rpcUrl);
-        this.rpcClient = new RpcClient(rpcUrl);
-        if (adminPrivateKeyBase58 != null && !adminPrivateKeyBase58.isEmpty()) {
-            this.adminAccount = new Account(Base58.decode(adminPrivateKeyBase58));
+        log.info("Solana Connector initialized connecting to {}", solanaProperties.getRpcUrl());
+        this.rpcClient = new RpcClient(solanaProperties.getRpcUrl());
+        
+        String adminKey = solanaProperties.getAdmin().getPrivateKey();
+        if (adminKey != null && !adminKey.isEmpty()) {
+            this.adminAccount = new Account(Base58.decode(adminKey));
         } else {
-            log.warn("No admin private key provided. Using random account (transactions will fail if SOL is needed).");
+            log.warn("No admin private key provided. Using random account.");
             this.adminAccount = new Account();
         }
+    }
+
+    private byte[] getDiscriminator(String key) {
+        List<Integer> list = solanaProperties.getDiscriminators().get(key);
+        if (list == null) {
+            log.error("Missing discriminator property: {}", key);
+            return new byte[8];
+        }
+        byte[] bytes = new byte[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            bytes[i] = list.get(i).byteValue();
+        }
+        return bytes;
     }
 
     @KafkaListener(topics = "${kafka.topics.assets-created}", groupId = "${kafka.groups.solana-connector}")
     public void createAssetOnChain(Map<String, Object> asset) {
         String assetId = (String) asset.get("id");
-        String name = (String) asset.get("name");
-        long totalSupply = ((Number) asset.get("totalSupply")).longValue();
-        String mintStr = (String) asset.get("solanaMintAddress");
+        log.info("Creating Asset on Solana: {}", assetId);
 
-        log.info("Creating Asset on Solana: {} with Mint: {}", assetId, mintStr);
-
-        PublicKey mint = new PublicKey(mintStr);
+        PublicKey mint = new PublicKey((String) asset.get("solanaMintAddress"));
         assetMintCache.put(assetId, mint);
         
-        PublicKey assetRegistryPda = derivePda(registryPrefix, assetId);
+        PublicKey assetRegistryPda = derivePda("registry", assetId);
 
-        List<AccountMeta> keys = new ArrayList<>();
-        keys.add(new AccountMeta(assetRegistryPda, false, true));
-        keys.add(new AccountMeta(mint, false, false));
-        keys.add(new AccountMeta(adminAccount.getPublicKey(), true, true));
-        keys.add(new AccountMeta(systemProgramId, false, false));
+        List<AccountMeta> keys = List.of(
+            new AccountMeta(assetRegistryPda, false, true),
+            new AccountMeta(mint, false, false),
+            new AccountMeta(adminAccount.getPublicKey(), true, true),
+            new AccountMeta(systemProgramId, false, false)
+        );
 
         ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(createAssetDiscriminator);
+        buffer.put(getDiscriminator("create-asset"));
         serializeString(buffer, assetId);
-        serializeString(buffer, name);
-        buffer.putLong(totalSupply);
+        serializeString(buffer, (String) asset.get("name"));
+        buffer.putLong(((Number) asset.get("totalSupply")).longValue());
         serializeString(buffer, (String) asset.getOrDefault("legalDocHash", "MOCK_HASH"));
-        buffer.putLong(((Number) asset.getOrDefault("tradeUnlockTimestamp", System.currentTimeMillis() / 1000 + 3600)).longValue());
+        buffer.putLong(((Number) asset.getOrDefault("tradeUnlockTimestamp", 0)).longValue());
 
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
     }
@@ -148,16 +105,15 @@ public class SolanaBlockchainService {
     public void toggleIpoOnChain(Map<String, Object> event) {
         String assetId = (String) event.get("assetId");
         boolean active = "IPO_ACTIVE".equals(event.get("status"));
-        log.info("Toggling IPO on Solana for {}: {}", assetId, active);
         
-        PublicKey assetRegistryPda = derivePda(registryPrefix, assetId);
+        PublicKey assetRegistryPda = derivePda("registry", assetId);
         List<AccountMeta> keys = List.of(
             new AccountMeta(assetRegistryPda, false, true),
             new AccountMeta(adminAccount.getPublicKey(), true, false)
         );
 
         ByteBuffer buffer = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(toggleIpoDiscriminator);
+        buffer.put(getDiscriminator("toggle-ipo"));
         buffer.put((byte) (active ? 1 : 0));
         
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
@@ -165,11 +121,8 @@ public class SolanaBlockchainService {
 
     @KafkaListener(topics = "${kafka.topics.vote-started}", groupId = "${kafka.groups.solana-connector}")
     public void startVotingOnChain(VotingEventDto event) {
-        String actionId = event.getActionId();
-        log.info("Initializing Voting on Solana: {}", actionId);
-        
-        PublicKey votingPda = derivePda(votingPrefix, actionId);
-        PublicKey assetRegistryPda = derivePda(registryPrefix, event.getAssetId());
+        PublicKey votingPda = derivePda("voting", event.getActionId());
+        PublicKey assetRegistryPda = derivePda("registry", event.getAssetId());
 
         List<AccountMeta> keys = List.of(
             new AccountMeta(votingPda, false, true),
@@ -179,8 +132,8 @@ public class SolanaBlockchainService {
         );
 
         ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(startVotingDiscriminator);
-        serializeString(buffer, actionId);
+        buffer.put(getDiscriminator("start-voting"));
+        serializeString(buffer, event.getActionId());
         serializeString(buffer, event.getTitle());
         buffer.put((byte) event.getOptions().size());
         buffer.putLong(System.currentTimeMillis() / 1000 + 86400); 
@@ -191,11 +144,9 @@ public class SolanaBlockchainService {
     @KafkaListener(topics = "${kafka.topics.orders-validated}", groupId = "${kafka.groups.solana-connector}")
     public void tradeDfa(ValidatedOrderEventDto event) {
         CompletableFuture.runAsync(() -> {
-            log.info("Processing Trade on Solana: {}", event.getId());
-            
-            PublicKey assetRegistryPda = derivePda(registryPrefix, event.getAssetId());
-            PublicKey sellerAccountPda = derivePda(userPrefix, event.getSellerWallet());
-            PublicKey buyerAccountPda = derivePda(userPrefix, event.getBuyerWallet());
+            PublicKey assetRegistryPda = derivePda("registry", event.getAssetId());
+            PublicKey sellerAccountPda = derivePda("user", event.getSellerWallet());
+            PublicKey buyerAccountPda = derivePda("user", event.getBuyerWallet());
             
             PublicKey sellerTokenAccount = event.getSellerTokenAccount() != null ? 
                 new PublicKey(event.getSellerTokenAccount()) : deriveAta(event.getSellerWallet(), event.getAssetId());
@@ -215,11 +166,10 @@ public class SolanaBlockchainService {
             );
 
             ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
-            buffer.put(tradeDfaDiscriminator);
+            buffer.put(getDiscriminator("trade-dfa"));
             buffer.putLong(event.getAmount().longValue());
 
-            TransactionInstruction instr = new TransactionInstruction(programId, keys, buffer.array());
-            String signature = sendAndConfirm(instr);
+            String signature = sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
             
             ExecutionResultDto result = new ExecutionResultDto();
             result.setOrderId(event.getId());
@@ -230,42 +180,36 @@ public class SolanaBlockchainService {
 
     @KafkaListener(topics = "${kafka.topics.users-registered}", groupId = "${kafka.groups.solana-connector}")
     public void registerUserOnChain(String userWalletStr) {
-        PublicKey userWallet = new PublicKey(userWalletStr);
-        PublicKey userAccountPda = derivePda(userPrefix, userWalletStr);
-        
+        PublicKey userAccountPda = derivePda("user", userWalletStr);
         List<AccountMeta> keys = List.of(
             new AccountMeta(userAccountPda, false, true),
-            new AccountMeta(userWallet, false, false),
+            new AccountMeta(new PublicKey(userWalletStr), false, false),
             new AccountMeta(adminAccount.getPublicKey(), true, true),
             new AccountMeta(systemProgramId, false, false)
         );
-
-        sendAndConfirm(new TransactionInstruction(programId, keys, registerUserDiscriminator));
+        sendAndConfirm(new TransactionInstruction(programId, keys, getDiscriminator("register-user")));
     }
 
     @KafkaListener(topics = "${kafka.topics.kyc-updated}", groupId = "${kafka.groups.solana-connector}")
     public void updateKycOnChain(KycUpdateEventDto event) {
-        PublicKey assetRegistryPda = derivePda(registryPrefix, event.getAssetId());
-        PublicKey targetUserAccountPda = derivePda(userPrefix, event.getUserWallet());
-        
+        PublicKey assetRegistryPda = derivePda("registry", event.getAssetId());
+        PublicKey targetUserAccountPda = derivePda("user", event.getUserWallet());
         List<AccountMeta> keys = List.of(
             new AccountMeta(assetRegistryPda, false, false),
             new AccountMeta(targetUserAccountPda, false, true),
             new AccountMeta(new PublicKey(event.getUserWallet()), false, false),
             new AccountMeta(adminAccount.getPublicKey(), true, false)
         );
-
         ByteBuffer buffer = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(updateKycDiscriminator);
+        buffer.put(getDiscriminator("update-kyc"));
         buffer.put(event.isApproved() ? (byte)1 : (byte)0);
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
     }
 
     @KafkaListener(topics = "${kafka.topics.admin-clawback}", groupId = "${kafka.groups.solana-connector}")
     public void clawbackOnChain(ClawbackEventDto event) {
-        PublicKey assetRegistryPda = derivePda(registryPrefix, event.getAssetId());
-        PublicKey platformAuthPda = derivePdaStatic(platformAuthPrefix);
-        
+        PublicKey assetRegistryPda = derivePda("registry", event.getAssetId());
+        PublicKey platformAuthPda = derivePdaStatic("platform_auth");
         List<AccountMeta> keys = List.of(
             new AccountMeta(assetRegistryPda, false, false),
             new AccountMeta(adminAccount.getPublicKey(), true, false),
@@ -274,25 +218,19 @@ public class SolanaBlockchainService {
             new AccountMeta(platformAuthPda, false, false),
             new AccountMeta(tokenProgramId, false, false)
         );
-
         ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(clawbackDiscriminator);
+        buffer.put(getDiscriminator("clawback"));
         buffer.putLong(event.getAmount());
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
     }
 
     @KafkaListener(topics = "${kafka.topics.dividend-payout}", groupId = "${kafka.groups.solana-connector}")
     public void executeDividendPayout(Map<String, Object> event) {
-        log.info("Executing Dividend Payout on Solana");
-        
         String assetId = (String) event.get("assetId");
-        PublicKey assetRegistryPda = derivePda(registryPrefix, assetId);
-        
-        String userWallet = (String) event.get("userWallet");
-        String sourceAccountStr = (String) event.get("sourceTokenAccount");
-        
-        PublicKey userTokenAccount = deriveAta(userWallet, assetId);
-        PublicKey sourceTokenAccount = sourceAccountStr != null ? new PublicKey(sourceAccountStr) : adminAccount.getPublicKey();
+        PublicKey assetRegistryPda = derivePda("registry", assetId);
+        PublicKey userTokenAccount = deriveAta((String) event.get("userWallet"), assetId);
+        PublicKey sourceTokenAccount = event.get("sourceTokenAccount") != null ? 
+            new PublicKey((String) event.get("sourceTokenAccount")) : adminAccount.getPublicKey();
 
         List<AccountMeta> keys = List.of(
             new AccountMeta(assetRegistryPda, false, false),
@@ -302,10 +240,9 @@ public class SolanaBlockchainService {
             new AccountMeta(tokenProgramId, false, false)
         );
 
-        long amount = ((Number) event.get("amount")).longValue();
         ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.put(dividendPayoutDiscriminator);
-        buffer.putLong(amount);
+        buffer.put(getDiscriminator("dividend-payout"));
+        buffer.putLong(((Number) event.get("amount")).longValue());
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
     }
 
@@ -313,34 +250,9 @@ public class SolanaBlockchainService {
         try {
             Transaction tx = new Transaction();
             tx.addInstruction(instr);
-            
-            // Get recent blockhash
-            String recentBlockhash = rpcClient.getApi().getRecentBlockhash();
-            tx.setRecentBlockHash(recentBlockhash);
-            
+            tx.setRecentBlockHash(rpcClient.getApi().getRecentBlockhash());
             String sig = rpcClient.getApi().sendTransaction(tx, adminAccount);
             log.info("Transaction sent: {}", sig);
-
-            // Wait for confirmation
-            boolean confirmed = false;
-            for (int i = 0; i < 60; i++) {
-                Thread.sleep(1000);
-                SignatureStatuses statuses = rpcClient.getApi().getSignatureStatuses(List.of(sig), true);
-                if (statuses != null && statuses.getValue() != null && !statuses.getValue().isEmpty()) {
-                    SignatureStatuses.Value status = statuses.getValue().get(0);
-                    if (status != null) {
-                        String confirmationStatus = status.getConfirmationStatus();
-                        if ("confirmed".equals(confirmationStatus) || "finalized".equals(confirmationStatus)) {
-                            confirmed = true;
-                            log.info("Transaction {} confirmed with status {}", sig, confirmationStatus);
-                            break;
-                        }
-                    }
-                }
-            }
-            if (!confirmed) {
-                log.warn("Transaction {} not confirmed within 60s timeout", sig);
-            }
             return sig;
         } catch (Exception e) {
             log.error("Solana transaction failed", e);
@@ -349,76 +261,35 @@ public class SolanaBlockchainService {
     }
 
     private PublicKey deriveAta(String wallet, String assetId) {
-        PublicKey mint = assetMintCache.get(assetId);
-        if (mint == null) {
-            mint = fetchMintFromChain(assetId);
-            if (mint != null) {
-                assetMintCache.put(assetId, mint);
-            } else {
-                log.error("Could not find mint for assetId: {}. Fallback to PDA.", assetId);
-                return derivePda(ataPrefix, wallet + assetId);
-            }
-        }
-        return getAssociatedTokenAddress(new PublicKey(wallet), mint);
-    }
-
-    private PublicKey getAssociatedTokenAddress(PublicKey owner, PublicKey mint) {
+        PublicKey mint = assetMintCache.computeIfAbsent(assetId, this::fetchMintFromChain);
+        if (mint == null) return derivePda("ata", wallet + assetId);
         try {
             return PublicKey.findProgramAddress(
-                List.of(owner.toByteArray(), tokenProgramId.toByteArray(), mint.toByteArray()),
+                List.of(new PublicKey(wallet).toByteArray(), tokenProgramId.toByteArray(), mint.toByteArray()),
                 associatedTokenProgramId
             ).getAddress();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to derive ATA", e);
-        }
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
     private PublicKey fetchMintFromChain(String assetId) {
         try {
-            PublicKey registryPda = derivePda(registryPrefix, assetId);
-            AccountInfo accountInfo = rpcClient.getApi().getAccountInfo(registryPda);
-            if (accountInfo == null || accountInfo.getValue() == null) {
-                return null;
-            }
-            
-            List<String> dataList = accountInfo.getValue().getData();
-            if (dataList == null || dataList.isEmpty()) {
-                return null;
-            }
-            
-            // Anchor data is Base64 encoded in the first element of the list
-            byte[] data = Base64.getDecoder().decode(dataList.get(0));
-            // Anchor account structure: 8 bytes discriminator + fields
-            // AssetRegistry: admin(32) + compliance(32) + mint(32)
-            // Mint starts at offset 8 + 32 + 32 = 72
-            if (data.length < 104) return null;
-            
-            byte[] mintBytes = Arrays.copyOfRange(data, 72, 104);
-            return new PublicKey(mintBytes);
-        } catch (Exception e) {
-            log.error("Failed to fetch mint from chain for assetId: {}", assetId, e);
-            return null;
-        }
+            AccountInfo info = rpcClient.getApi().getAccountInfo(derivePda("registry", assetId));
+            if (info == null || info.getValue() == null) return null;
+            byte[] data = Base64.getDecoder().decode(info.getValue().getData().get(0));
+            return new PublicKey(Arrays.copyOfRange(data, 72, 104));
+        } catch (Exception e) { return null; }
     }
 
-    private PublicKey derivePda(String prefix, String seed) {
+    private PublicKey derivePda(String type, String seed) {
+        String prefix = solanaProperties.getPda().getPrefix().get(type);
         try {
-            byte[] seedBytes;
-            if (userPrefix.equals(prefix)) {
-                // For user accounts, seed is the wallet public key bytes
-                seedBytes = Base58.decode(seed);
-            } else {
-                // For registry and voting, seed is the ID string bytes
-                seedBytes = seed.getBytes();
-            }
+            byte[] seedBytes = "user".equals(type) ? Base58.decode(seed) : seed.getBytes();
             return PublicKey.findProgramAddress(List.of(prefix.getBytes(), seedBytes), programId).getAddress();
-        } catch (Exception e) {
-            log.error("Failed to derive PDA for prefix {} and seed {}", prefix, seed, e);
-            return systemProgramId;
-        }
+        } catch (Exception e) { return systemProgramId; }
     }
 
-    private PublicKey derivePdaStatic(String prefix) {
+    private PublicKey derivePdaStatic(String type) {
+        String prefix = solanaProperties.getPda().getPrefix().get(type);
         try {
             return PublicKey.findProgramAddress(List.of(prefix.getBytes()), programId).getAddress();
         } catch (Exception e) { throw new RuntimeException(e); }

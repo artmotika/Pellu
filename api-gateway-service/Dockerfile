@@ -6,5 +6,5 @@ RUN ./gradlew :api-gateway-service:build -x test
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/api-gateway-service/build/libs/*.jar app.jar
+COPY --from=build /app/api-gateway-service/build/libs/api-gateway-service-0.0.1-SNAPSHOT.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]

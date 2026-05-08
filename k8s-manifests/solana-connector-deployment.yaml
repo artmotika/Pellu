@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: solana-connector
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: solana-connector
@@ -12,16 +12,18 @@ spec:
       labels:
         app: solana-connector
     spec:
+      hostNetwork: true
       containers:
       - name: solana-connector
         image: solana-connector:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8082
         env:
         - name: KAFKA_BROKERS
-          value: kafka:9092
+          value: localhost:9092
         - name: SOLANA_RPC_URL
-          value: http://host.docker.internal:8899
+          value: http://localhost:8899
         - name: SOLANA_PROGRAM_ID
           value: Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS
         - name: SOLANA_ADMIN_PRIVATE_KEY
