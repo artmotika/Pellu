@@ -55,10 +55,10 @@
 2.  **Сборка Docker-образов микросервисов:**
     ```bash
     # Выполните в корне проекта
-    docker build -t api-gateway:latest ./api-gateway-service
-    docker build -t auth-service:latest ./auth-service
-    docker build -t solana-connector:latest ./solana-connector-service
-    docker build -t trading-engine:latest ./trading-engine-service
+    docker build -t api-gateway:latest -f api-gateway-service/Dockerfile .
+    docker build -t auth-service:latest -f auth-service/Dockerfile .
+    docker build -t solana-connector:latest -f solana-connector-service/Dockerfile .
+    docker build -t trading-engine:latest -f trading-engine-service/Dockerfile .
     ```
 
 ---

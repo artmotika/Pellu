@@ -17,9 +17,46 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-app:
-  solana:
-    rpc-url: ${SOLANA_RPC_URL:https://api.devnet.solana.com}
+solana:
+  rpc:
+    url: ${SOLANA_RPC_URL:http://host.docker.internal:8899}
+  program:
+    id: ${SOLANA_PROGRAM_ID:Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS}
+    token-program-id: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    associated-token-program-id: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+    system-program-id: "11111111111111111111111111111111"
+  admin:
+    private-key: ${SOLANA_ADMIN_PRIVATE_KEY:3JhdAWiLtwKzjiqamDsNRz54QnvFs7myEYvYQiuAccWraULzxouRjiqnXinscEfymSdvDrSNTaPCW4xDBTYANov9}
+  pda:
+    prefix:
+      registry: "registry"
+      voting: "voting"
+      user: "user"
+      platform-auth: "platform_auth"
+      ata: "ata"
+  discriminators:
+    create-asset: [0xb1, 0xf2, 0x06, 0x7c, 0x1e, 0x90, 0x51, 0x0f]
+    toggle-ipo: [0x52, 0x5a, 0x1f, 0x23, 0x85, 0x91, 0xac, 0x10]
+    start-voting: [0x33, 0xc6, 0xe5, 0x73, 0xb9, 0xfb, 0x80, 0xf3]
+    trade-dfa: [0xec, 0x85, 0x73, 0xfc, 0xc6, 0x1e, 0x48, 0xf4]
+    register-user: [0x8e, 0x6e, 0x97, 0x01, 0xd8, 0xab, 0xe9, 0x72]
+    update-kyc: [0xcb, 0xc6, 0xb0, 0x91, 0xc4, 0x44, 0x33, 0x3e]
+    clawback: [0xff, 0xa8, 0x34, 0x9d, 0x76, 0xc1, 0xf0, 0xa7]
+    dividend-payout: [0x3d, 0x91, 0x8a, 0x22, 0x92, 0xb3, 0x93, 0x55]
+
+kafka:
+  topics:
+    assets-created: "assets.created"
+    ipo-status: "ipo.status"
+    vote-started: "vote.started"
+    orders-validated: "orders.validated"
+    users-registered: "users.registered"
+    kyc-updated: "kyc.updated"
+    admin-clawback: "admin.clawback"
+    dividend-payout: "dividend.payout"
+    trades-executed: "trades.executed"
+  groups:
+    solana-connector: "solana-connector-group"
 
 management:
   endpoints:

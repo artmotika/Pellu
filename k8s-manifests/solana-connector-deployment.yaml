@@ -21,7 +21,11 @@ spec:
         - name: KAFKA_BROKERS
           value: kafka:9092
         - name: SOLANA_RPC_URL
-          value: https://api.devnet.solana.com
+          value: http://host.docker.internal:8899
+        - name: SOLANA_PROGRAM_ID
+          value: Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS
+        - name: SOLANA_ADMIN_PRIVATE_KEY
+          value: 3JhdAWiLtwKzjiqamDsNRz54QnvFs7myEYvYQiuAccWraULzxouRjiqnXinscEfymSdvDrSNTaPCW4xDBTYANov9
 ---
 apiVersion: v1
 kind: Service

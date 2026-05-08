@@ -27,7 +27,7 @@ Pellu is a next-generation platform for issuing and trading Digital Financial As
 
 1.  **Configure Solana**: Ensure `SOLANA_SETUP.md` is followed for local or devnet deployment.
 2.  **Run Infrastructure**: `docker-compose up -d` (Kafka, Postgres).
-3.  **Start Services**: Run `gradlew bootRun` in each service directory or use `docker-compose`.
+3.  **Start Services**: Run `./gradlew :<service-name>:bootRun` from the project root.
 
 ## API Quick Start
 
