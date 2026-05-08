@@ -7,6 +7,8 @@ import org.artmotika.solanaconnectorservice.dto.*;
 import org.bitcoinj.core.Base58;
 import org.p2p.solanaj.core.*;
 import org.p2p.solanaj.rpc.RpcClient;
+import org.p2p.solanaj.rpc.types.AccountInfo;
+import org.p2p.solanaj.rpc.types.SignatureStatuses;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -16,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -23,6 +26,9 @@ import java.util.concurrent.Executors;
 @RequiredArgsConstructor
 @Slf4j
 public class SolanaBlockchainService {
+
+    private static final PublicKey TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    private static final PublicKey ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
     @Value("${solana.rpc.url:https://api.devnet.solana.com}")
     private String rpcUrl;
@@ -39,6 +45,8 @@ public class SolanaBlockchainService {
     
     private Account adminAccount;
     private PublicKey programId;
+    
+    private final Map<String, PublicKey> assetMintCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -63,6 +71,8 @@ public class SolanaBlockchainService {
         log.info("Creating Asset on Solana: {} with Mint: {}", assetId, mintStr);
 
         PublicKey mint = new PublicKey(mintStr);
+        assetMintCache.put(assetId, mint);
+        
         PublicKey assetRegistryPda = derivePda("registry", assetId);
 
         List<AccountMeta> keys = new ArrayList<>();
@@ -153,7 +163,7 @@ public class SolanaBlockchainService {
                 new AccountMeta(sellerTokenAccount, false, true),
                 new AccountMeta(buyerTokenAccount, false, true),
                 new AccountMeta(adminAccount.getPublicKey(), true, false),
-                new AccountMeta(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), false, false)
+                new AccountMeta(TOKEN_PROGRAM_ID, false, false)
             );
 
             byte[] discriminator = { (byte)0xec, (byte)0x85, 0x73, (byte)0xfc, (byte)0xc6, 0x1e, 0x48, (byte)0xf4 };
@@ -217,7 +227,7 @@ public class SolanaBlockchainService {
             new AccountMeta(new PublicKey(event.getTargetTokenAccount()), false, true),
             new AccountMeta(new PublicKey(event.getDestinationTokenAccount()), false, true),
             new AccountMeta(platformAuthPda, false, false),
-            new AccountMeta(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), false, false)
+            new AccountMeta(TOKEN_PROGRAM_ID, false, false)
         );
 
         byte[] discriminator = { (byte)0xff, (byte)0xa8, 0x34, (byte)0x9d, 0x76, (byte)0xc1, (byte)0xf0, (byte)0xa7 };
@@ -245,7 +255,7 @@ public class SolanaBlockchainService {
             new AccountMeta(sourceTokenAccount, false, true),
             new AccountMeta(userTokenAccount, false, true),
             new AccountMeta(adminAccount.getPublicKey(), true, false),
-            new AccountMeta(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), false, false)
+            new AccountMeta(TOKEN_PROGRAM_ID, false, false)
         );
 
         byte[] discriminator = { 0x3d, (byte)0x91, (byte)0x8a, 0x22, (byte)0x92, (byte)0xb3, (byte)0x93, (byte)0x55 };
@@ -260,8 +270,34 @@ public class SolanaBlockchainService {
         try {
             Transaction tx = new Transaction();
             tx.addInstruction(instr);
+            
+            // Get recent blockhash
+            String recentBlockhash = rpcClient.getApi().getRecentBlockhash();
+            tx.setRecentBlockHash(recentBlockhash);
+            
             String sig = rpcClient.getApi().sendTransaction(tx, adminAccount);
-            Thread.sleep(1000); 
+            log.info("Transaction sent: {}", sig);
+
+            // Wait for confirmation
+            boolean confirmed = false;
+            for (int i = 0; i < 60; i++) {
+                Thread.sleep(1000);
+                SignatureStatuses statuses = rpcClient.getApi().getSignatureStatuses(List.of(sig), true);
+                if (statuses != null && statuses.getValue() != null && !statuses.getValue().isEmpty()) {
+                    SignatureStatuses.Value status = statuses.getValue().get(0);
+                    if (status != null) {
+                        String confirmationStatus = status.getConfirmationStatus();
+                        if ("confirmed".equals(confirmationStatus) || "finalized".equals(confirmationStatus)) {
+                            confirmed = true;
+                            log.info("Transaction {} confirmed with status {}", sig, confirmationStatus);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!confirmed) {
+                log.warn("Transaction {} not confirmed within 60s timeout", sig);
+            }
             return sig;
         } catch (Exception e) {
             log.error("Solana transaction failed", e);
@@ -270,8 +306,56 @@ public class SolanaBlockchainService {
     }
 
     private PublicKey deriveAta(String wallet, String assetId) {
-        // Simplified ATA derivation: using PDA to keep it consistent.
-        return derivePda("ata", wallet + assetId);
+        PublicKey mint = assetMintCache.get(assetId);
+        if (mint == null) {
+            mint = fetchMintFromChain(assetId);
+            if (mint != null) {
+                assetMintCache.put(assetId, mint);
+            } else {
+                log.error("Could not find mint for assetId: {}. Fallback to PDA.", assetId);
+                return derivePda("ata", wallet + assetId);
+            }
+        }
+        return getAssociatedTokenAddress(new PublicKey(wallet), mint);
+    }
+
+    private PublicKey getAssociatedTokenAddress(PublicKey owner, PublicKey mint) {
+        try {
+            return PublicKey.findProgramAddress(
+                List.of(owner.toByteArray(), TOKEN_PROGRAM_ID.toByteArray(), mint.toByteArray()),
+                ASSOCIATED_TOKEN_PROGRAM_ID
+            ).getAddress();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to derive ATA", e);
+        }
+    }
+
+    private PublicKey fetchMintFromChain(String assetId) {
+        try {
+            PublicKey registryPda = derivePda("registry", assetId);
+            AccountInfo accountInfo = rpcClient.getApi().getAccountInfo(registryPda);
+            if (accountInfo == null || accountInfo.getValue() == null) {
+                return null;
+            }
+            
+            List<String> dataList = accountInfo.getValue().getData();
+            if (dataList == null || dataList.isEmpty()) {
+                return null;
+            }
+            
+            // Anchor data is Base64 encoded in the first element of the list
+            byte[] data = Base64.getDecoder().decode(dataList.get(0));
+            // Anchor account structure: 8 bytes discriminator + fields
+            // AssetRegistry: admin(32) + compliance(32) + mint(32)
+            // Mint starts at offset 8 + 32 + 32 = 72
+            if (data.length < 104) return null;
+            
+            byte[] mintBytes = Arrays.copyOfRange(data, 72, 104);
+            return new PublicKey(mintBytes);
+        } catch (Exception e) {
+            log.error("Failed to fetch mint from chain for assetId: {}", assetId, e);
+            return null;
+        }
     }
 
     private PublicKey derivePda(String prefix, String seed) {
