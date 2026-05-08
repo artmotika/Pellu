@@ -21,7 +21,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
+  kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
       group-id: trading-engine-group

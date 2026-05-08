@@ -12,7 +12,6 @@ spec:
       labels:
         app: postgres
     spec:
-      hostNetwork: true
       containers:
       - name: postgres
         image: postgres:15-alpine

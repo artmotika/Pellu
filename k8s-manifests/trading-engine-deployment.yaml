@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: trading-engine
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: trading-engine
@@ -12,7 +12,6 @@ spec:
       labels:
         app: trading-engine
     spec:
-      hostNetwork: true
       containers:
       - name: trading-engine
         image: trading-engine:latest
@@ -21,9 +20,9 @@ spec:
         - containerPort: 8081
         env:
         - name: DB_URL
-          value: jdbc:postgresql://localhost:5432/platform
+          value: jdbc:postgresql://postgres:5432/platform
         - name: KAFKA_BROKERS
-          value: localhost:9092
+          value: kafka-service:9092
         - name: PLATFORM_TOKEN_ACCOUNT
           value: "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
         volumeMounts:
