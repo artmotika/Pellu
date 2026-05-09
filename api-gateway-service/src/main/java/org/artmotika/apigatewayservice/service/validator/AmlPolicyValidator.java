@@ -12,5 +12,8 @@ public class AmlPolicyValidator implements OrderValidator {
         if (user.getAmlRiskScore() != null && user.getAmlRiskScore() > 70) {
             throw new AmlViolationException("High AML risk score: " + user.getAmlRiskScore());
         }
+        if (user.isFrozen()) {
+            throw new AmlViolationException("User account is frozen due to AML/compliance concerns");
+        }
     }
 }

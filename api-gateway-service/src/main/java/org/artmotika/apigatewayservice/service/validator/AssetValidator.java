@@ -34,6 +34,10 @@ public class AssetValidator implements OrderValidator {
             throw new AmlViolationException("Trading is suspended for this asset");
         }
 
+        if (asset.getTradeUnlockTimestamp() != null && asset.getTradeUnlockTimestamp() > System.currentTimeMillis() / 1000) {
+            throw new AmlViolationException("Trading is locked until " + asset.getTradeUnlockTimestamp());
+        }
+
         if (asset.getStatus() == AssetStatus.IPO_ACTIVE) {
             if (order.getType().name().equals("SELL")) {
                 throw new AmlViolationException("Selling is not allowed during IPO phase");

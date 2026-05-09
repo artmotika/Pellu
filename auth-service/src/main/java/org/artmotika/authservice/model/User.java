@@ -17,4 +17,5 @@ public class User {
     private Integer amlRiskScore;
     private String password; // hashed
     private boolean isQualified; // true = Qualified Investor
+    private boolean isFrozen;
 }

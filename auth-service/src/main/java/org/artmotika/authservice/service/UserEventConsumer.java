@@ -33,10 +33,11 @@ public class UserEventConsumer {
     @KafkaListener(topics = "aml.frozen", groupId = "auth-service-group")
     public void consumeAmlFreeze(Map<String, Object> event) {
         String userId = (String) event.get("userId");
-        log.info("Consuming AML freeze for user {}", userId);
+        boolean freeze = (boolean) event.getOrDefault("freeze", true);
+        log.info("Consuming AML freeze for user {}: {}", userId, freeze);
         
         userRepository.findById(userId).ifPresent(user -> {
-            user.setQualified(false); // Disallow trading
+            user.setFrozen(freeze);
             userRepository.save(user);
         });
     }

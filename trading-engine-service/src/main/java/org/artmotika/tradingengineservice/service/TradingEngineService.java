@@ -47,6 +47,7 @@ public class TradingEngineService {
         asset.setType(event.getType());
         asset.setStatus(event.getStatus());
         asset.setIpoPrice(event.getIpoPrice());
+        asset.setTradeUnlockTimestamp(event.getTradeUnlockTimestamp() != null ? event.getTradeUnlockTimestamp() : 0L);
         assetRepository.save(asset);
         log.info("Asset {} saved to database", event.getId());
     }

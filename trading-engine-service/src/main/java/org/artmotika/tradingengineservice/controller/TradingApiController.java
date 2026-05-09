@@ -31,6 +31,7 @@ public class TradingApiController {
                 .type(asset.getType())
                 .status(asset.getStatus())
                 .ipoPrice(asset.getIpoPrice())
+                .tradeUnlockTimestamp(asset.getTradeUnlockTimestamp())
                 .solanaMintAddress(asset.getSolanaMintAddress())
                 .build();
         return ResponseEntity.ok(dto);

@@ -15,4 +15,5 @@ public class UserDto {
     private KycStatus kycStatus;
     private Integer amlRiskScore;
     private boolean isQualified;
+    private boolean isFrozen;
 }

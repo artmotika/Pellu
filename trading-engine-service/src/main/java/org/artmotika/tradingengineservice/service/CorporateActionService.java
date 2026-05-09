@@ -28,6 +28,13 @@ public class CorporateActionService {
     @org.springframework.beans.factory.annotation.Value("${app.platform.token-account}")
     private String platformTokenAccount;
 
+    @org.springframework.kafka.annotation.KafkaListener(topics = "dividend.trigger", groupId = "trading-engine-group")
+    public void handleDividendTrigger(Map<String, Object> event) {
+        String assetId = (String) event.get("assetId");
+        BigDecimal amount = new BigDecimal(event.get("amount").toString());
+        triggerDividend(assetId, amount);
+    }
+
     public void triggerDividend(String assetId, BigDecimal amountPerShare) {
         Asset asset = assetRepository.findById(assetId).orElseThrow();
         

@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS users (
    password VARCHAR(255),
    is_qualified BOOLEAN DEFAULT FALSE
 );
+
+--changeset add_is_frozen:2
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_frozen BOOLEAN DEFAULT FALSE;

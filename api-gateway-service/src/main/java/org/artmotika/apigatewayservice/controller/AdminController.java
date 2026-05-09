@@ -49,13 +49,13 @@ public class AdminController {
     }
 
     @PostMapping("/vote")
-    public ResponseEntity<String> startVote(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<Map<String, String>> startVote(@RequestBody Map<String, Object> req) {
         Map<String, Object> mutableReq = new java.util.HashMap<>(req);
-        if (!mutableReq.containsKey("actionId")) {
-            mutableReq.put("actionId", UUID.randomUUID().toString());
-        }
+        String actionId = (String) mutableReq.getOrDefault("actionId", UUID.randomUUID().toString());
+        mutableReq.put("actionId", actionId);
+        
         kafkaTemplate.send("vote.started", mutableReq);
-        return ResponseEntity.ok("Voting initiated");
+        return ResponseEntity.ok(Map.of("actionId", actionId, "status", "Voting initiated"));
     }
 
     @PostMapping("/kyc")
@@ -74,5 +74,11 @@ public class AdminController {
     public ResponseEntity<String> clawback(@RequestBody Map<String, Object> req) {
         kafkaTemplate.send("admin.clawback", req);
         return ResponseEntity.ok("Clawback command sent");
+    }
+
+    @PostMapping("/dividends")
+    public ResponseEntity<String> triggerDividend(@RequestBody Map<String, Object> req) {
+        kafkaTemplate.send("dividend.trigger", req);
+        return ResponseEntity.ok("Dividend trigger command sent");
     }
 }

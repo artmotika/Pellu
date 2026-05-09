@@ -41,6 +41,7 @@ public class AuthController {
                 .kycStatus(user.getKycStatus())
                 .amlRiskScore(user.getAmlRiskScore())
                 .isQualified(user.isQualified())
+                .isFrozen(user.isFrozen())
                 .build();
         return ResponseEntity.ok(dto);
     }
