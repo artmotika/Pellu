@@ -1,6 +1,6 @@
 package org.artmotika.tradingengineservice.service;
 
-import org.artmotika.tradingengineservice.dto.AssetCreatedEventDto;
+import org.artmotika.common.dto.AssetDto;
 import org.artmotika.common.dto.AssetStatus;
 import org.artmotika.common.dto.AssetType;
 import org.artmotika.common.dto.OrderRequestDto;
@@ -43,7 +43,7 @@ class TradingEngineServiceTest {
 
     @Test
     void handleAssetCreated_ShouldSaveAsset() {
-        AssetCreatedEventDto event = new AssetCreatedEventDto();
+        AssetDto event = new AssetDto();
         event.setId("a1");
         event.setName("Gold");
         event.setTotalSupply(1000L);

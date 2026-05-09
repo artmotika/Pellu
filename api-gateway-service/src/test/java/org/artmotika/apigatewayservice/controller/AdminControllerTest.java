@@ -64,8 +64,8 @@ class AdminControllerTest {
     @Test
     void startVote_ShouldSendEvent() {
         Map<String, Object> req = Map.of("assetId", "a1", "title", "Split?");
-        ResponseEntity<String> response = adminController.startVote(req);
-        assertEquals("Voting initiated", response.getBody());
+        ResponseEntity<Map<String, String>> response = adminController.startVote(req);
+        assertEquals("Voting initiated", response.getBody().get("status"));
         verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(Map.class));
     }
 
