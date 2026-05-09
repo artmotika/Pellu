@@ -66,3 +66,7 @@ CREATE TABLE IF NOT EXISTS user_balances (
     weighted_average_cost DECIMAL(19, 4),
     last_update TIMESTAMP NOT NULL
 );
+
+ALTER TABLE orders ADD COLUMN wallet_address VARCHAR(255);
+
+ALTER TABLE user_balances ADD COLUMN wallet_address VARCHAR(255);
