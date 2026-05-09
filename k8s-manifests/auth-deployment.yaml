@@ -14,23 +14,36 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: auth-service:latest
+        image: auth-service:local-testing
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8083
         env:
-        - name: SPRING_DATASOURCE_URL
+        - name: DB_URL
           value: jdbc:postgresql://postgres:5432/platform
+        - name: DB_USERNAME
+          value: postgres
+        - name: DB_PASSWORD
+          value: postgres
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: kafka-service:9092
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: auth-service-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: auth-service
 spec:
+  type: NodePort
   selector:
     app: auth-service
   ports:
   - port: 8083
     targetPort: 8083
+    nodePort: 30083

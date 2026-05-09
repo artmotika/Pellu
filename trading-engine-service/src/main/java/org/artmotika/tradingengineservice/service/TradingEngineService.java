@@ -1,7 +1,8 @@
 package org.artmotika.tradingengineservice.service;
 
 import lombok.RequiredArgsConstructor;
-import org.artmotika.tradingengineservice.dto.AssetCreatedEventDto;
+import lombok.extern.slf4j.Slf4j;
+import org.artmotika.common.dto.AssetDto;
 import org.artmotika.common.dto.AssetStatus;
 import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
@@ -19,10 +20,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TradingEngineService {
     private final OrderRepository orderRepository;
     private final TradeLedgerRepository ledgerRepository;
@@ -34,7 +37,8 @@ public class TradingEngineService {
     private final BalanceService balanceService;
 
     @KafkaListener(topics = "assets.created", groupId = "trading-engine-group")
-    public void handleAssetCreated(AssetCreatedEventDto event) {
+    public void handleAssetCreated(AssetDto event) {
+        log.info("Consuming asset creation: {}", event.getId());
         Asset asset = new Asset();
         asset.setId(event.getId());
         asset.setName(event.getName());
@@ -44,15 +48,37 @@ public class TradingEngineService {
         asset.setStatus(event.getStatus());
         asset.setIpoPrice(event.getIpoPrice());
         assetRepository.save(asset);
+        log.info("Asset {} saved to database", event.getId());
     }
 
     @KafkaListener(topics = "ipo.status", groupId = "trading-engine-group")
     public void handleIpoStatusUpdate(Map<String, Object> event) {
         String assetId = (String) event.get("assetId");
-        AssetStatus status = AssetStatus.valueOf((String) event.get("status"));
-        Asset asset = assetRepository.findById(assetId).orElseThrow();
+        String statusStr = (String) event.get("status");
+        log.info("Consuming IPO status update for asset {}: {}", assetId, statusStr);
+        
+        AssetStatus status = AssetStatus.valueOf(statusStr);
+        
+        // Simple retry for race condition
+        Asset asset = null;
+        for (int i = 0; i < 5; i++) {
+            Optional<Asset> assetOpt = assetRepository.findById(assetId);
+            if (assetOpt.isPresent()) {
+                asset = assetOpt.get();
+                break;
+            }
+            log.warn("Asset {} not found yet, retrying... ({}/5)", assetId, i + 1);
+            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+
+        if (asset == null) {
+            log.error("Asset {} still not found after retries. Skipping IPO status update.", assetId);
+            return;
+        }
+
         asset.setStatus(status);
         assetRepository.save(asset);
+        log.info("Asset {} status updated to {}", assetId, status);
     }
 
     @Value("${app.platform.wallet:Platform111111111111111111111111111111111}")

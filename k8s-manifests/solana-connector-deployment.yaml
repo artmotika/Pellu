@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: solana-connector
-        image: solana-connector:latest
+        image: solana-connector:local-testing
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8082

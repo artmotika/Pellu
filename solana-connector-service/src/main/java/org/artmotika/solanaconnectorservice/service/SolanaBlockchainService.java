@@ -3,6 +3,7 @@ package org.artmotika.solanaconnectorservice.service;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.artmotika.common.dto.AssetDto;
 import org.artmotika.solanaconnectorservice.config.SolanaProperties;
 import org.artmotika.solanaconnectorservice.dto.*;
 import org.bitcoinj.core.Base58;
@@ -74,11 +75,11 @@ public class SolanaBlockchainService {
     }
 
     @KafkaListener(topics = "${kafka.topics.assets-created}", groupId = "${kafka.groups.solana-connector}")
-    public void createAssetOnChain(Map<String, Object> asset) {
-        String assetId = (String) asset.get("id");
+    public void createAssetOnChain(AssetDto asset) {
+        String assetId = asset.getId();
         log.info("Creating Asset on Solana: {}", assetId);
 
-        PublicKey mint = new PublicKey((String) asset.get("solanaMintAddress"));
+        PublicKey mint = new PublicKey(asset.getSolanaMintAddress());
         assetMintCache.put(assetId, mint);
         
         PublicKey assetRegistryPda = derivePda("registry", assetId);
@@ -93,10 +94,10 @@ public class SolanaBlockchainService {
         ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put(getDiscriminator("create-asset"));
         serializeString(buffer, assetId);
-        serializeString(buffer, (String) asset.get("name"));
-        buffer.putLong(((Number) asset.get("totalSupply")).longValue());
-        serializeString(buffer, (String) asset.getOrDefault("legalDocHash", "MOCK_HASH"));
-        buffer.putLong(((Number) asset.getOrDefault("tradeUnlockTimestamp", 0)).longValue());
+        serializeString(buffer, asset.getName());
+        buffer.putLong(asset.getTotalSupply());
+        serializeString(buffer, asset.getLegalDocHash() != null ? asset.getLegalDocHash() : "MOCK_HASH");
+        buffer.putLong(asset.getTradeUnlockTimestamp() != null ? asset.getTradeUnlockTimestamp() : 0L);
 
         sendAndConfirm(new TransactionInstruction(programId, keys, buffer.array()));
     }
