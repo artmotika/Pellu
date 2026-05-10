@@ -1,13 +1,26 @@
 server:
   port: 8083
+  tomcat:
+    threads:
+      max: 1000
+    max-connections: 20000
 
 spring:
+  threads:
+    virtual:
+      enabled: true
   application:
     name: auth-service
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:54321/auth_db}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 5000
+      max-lifetime: 1800000
   liquibase:
     change-log: classpath:db/changelog/db.changelog-auth.sql
     enabled: true
@@ -15,14 +28,21 @@ spring:
     hibernate:
       ddl-auto: validate
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.batch_size: 20
+        order_inserts: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: 1 # Faster than 'all' for user registration logs
+      properties:
+        delivery.timeout.ms: 3000
+        request.timeout.ms: 2000
     consumer:
       group-id: auth-service-group
       auto-offset-reset: earliest
@@ -32,6 +52,16 @@ spring:
         spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "*"
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60s
+      cache-null-values: false
 
 app:
   security:

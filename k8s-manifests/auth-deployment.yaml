@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: auth-service
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: auth-service
@@ -14,8 +14,15 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: auth-service:local-testing
+        image: auth-service:v22
         imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "1024Mi"
         ports:
         - containerPort: 8083
         env:
@@ -27,6 +34,8 @@ spec:
           value: postgres
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: kafka-service:9092
+        - name: REDIS_HOST
+          value: redis-service
         volumeMounts:
         - name: config-volume
           mountPath: /app/config

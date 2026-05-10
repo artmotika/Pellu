@@ -37,7 +37,7 @@ class TradingUser(FastHttpUser):
             catch_response=True
         ) as resp:
             if resp.status_code not in [200, 201]:
-                resp.failure(f"User Reg failed: {resp.status_code}")
+                resp.failure(f"User Reg failed: {resp.status_code} - {resp.text}")
                 return
             self.user_id = resp.json().get("userId")
 

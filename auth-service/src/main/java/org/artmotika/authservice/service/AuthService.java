@@ -35,6 +35,7 @@ public class AuthService {
         return userRepository.findById(id).orElseThrow();
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public AuthResponseDto register(String wallet, String password) {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
@@ -45,12 +46,18 @@ public class AuthService {
                 .password(passwordEncoder.encode(password))
                 .build();
         userRepository.save(user);
+        
+        // Fire and forget to minimize latency
         kafkaTemplate.send("users.registered", user.getWalletAddress());
+        
         return new AuthResponseDto(generateToken(user), user.getId());
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AuthResponseDto login(String wallet, String password) {
-        User user = userRepository.findByWalletAddress(wallet).orElseThrow();
+        User user = userRepository.findByWalletAddress(wallet)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
         if (passwordEncoder.matches(password, user.getPassword())) {
             return new AuthResponseDto(generateToken(user), user.getId());
         }

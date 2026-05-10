@@ -84,7 +84,17 @@ class MasterTestSuite:
             requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/finalize", params={"assetId": aid}, headers=self.get_auth_header())
         
         log(f"Created asset {aid} with status {status}")
-        time.sleep(1) # Wait for sync
+        
+        # --- NEW: SYNC WAIT ---
+        max_sync_retries = 10
+        for i in range(max_sync_retries):
+            check_resp = requests.get(f"{GATEWAY_URL}/api/v1/trading/assets/{aid}", headers=self.get_auth_header())
+            if check_resp.status_code == 200:
+                log(f"Asset {aid} successfully synced to cache")
+                return aid
+            time.sleep(1.0)
+            
+        error(f"Asset {aid} failed to sync to cache after {max_sync_retries}s")
         return aid
 
     # --- 1. COMPLIANCE ---
@@ -94,7 +104,7 @@ class MasterTestSuite:
         uid = self.register_user("compliance_user")
         aid = self.setup_asset("TRADING")
         
-        # 1. PENDING
+        # 1. PENDING (rejected)
         r1 = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
         }, headers=self.get_auth_header("compliance_user"))
@@ -103,9 +113,22 @@ class MasterTestSuite:
 
         # 2. APPROVE
         requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
-        time.sleep(2) # Wait for Kafka + DB
-        self.login_user("compliance_user")
         
+        # Verification loop for claims
+        log("Waiting for KYC approval to propagate...")
+        approved = False
+        for _ in range(30):
+            self.login_user("compliance_user")
+            check = requests.get(f"{GATEWAY_URL}/api/v1/trading/me", headers=self.get_auth_header("compliance_user"))
+            if check.status_code == 200 and check.json().get("kycStatus") == "APPROVED":
+                approved = True
+                break
+            time.sleep(1.0)
+            
+        if not approved:
+            error("FAILURE: KYC approval did not propagate in time")
+            return
+
         r2 = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
         }, headers=self.get_auth_header("compliance_user"))
