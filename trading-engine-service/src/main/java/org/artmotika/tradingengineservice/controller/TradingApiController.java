@@ -16,6 +16,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TradingApiController {
     private final AssetRepository assetRepository;
+    private final org.artmotika.tradingengineservice.mapper.AssetMapper assetMapper;
 
     @GetMapping("/assets/{id}")
     public ResponseEntity<AssetDto> getAsset(@PathVariable String id) {
@@ -23,18 +24,7 @@ public class TradingApiController {
         if (assetOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        Asset asset = assetOpt.get();
-        AssetDto dto = AssetDto.builder()
-                .id(asset.getId())
-                .name(asset.getName())
-                .totalSupply(asset.getTotalSupply())
-                .type(asset.getType())
-                .status(asset.getStatus())
-                .ipoPrice(asset.getIpoPrice())
-                .tradeUnlockTimestamp(asset.getTradeUnlockTimestamp())
-                .solanaMintAddress(asset.getSolanaMintAddress())
-                .build();
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(assetMapper.toDto(assetOpt.get()));
     }
 
     @GetMapping("/limits/{userId}")

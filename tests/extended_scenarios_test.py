@@ -31,9 +31,16 @@ class ExtendedScenariosTest:
     def __init__(self):
         self.asset_id = None
         self.user_ids = {}
+        self.user_tokens = {}
+        self.admin_token = None
+        self.admin_id = None
 
     def register_user(self, name, password="p1"):
         wallet = name + str(uuid.uuid4())[:20]
+        # Admin wallet starts with ADMIN to get ROLE_ADMIN
+        if name == "admin":
+            wallet = "ADMIN_" + str(uuid.uuid4())[:20]
+            
         resp = requests.post(f"{AUTH_URL}/api/v1/auth/register", json={"wallet": wallet, "password": password})
         if resp.status_code not in [200, 201]: 
             error(f"User {name} reg failed: {resp.text}")
@@ -41,9 +48,22 @@ class ExtendedScenariosTest:
         token = resp.json().get("token")
         uid = get_id_from_token(token)
         self.user_ids[name] = uid
+        self.user_tokens[name] = token
+        
+        if name == "admin":
+            self.admin_token = token
+            self.admin_id = uid
+            
         return uid
 
+    def get_auth_header(self, name=None):
+        token = self.user_tokens.get(name) if name else self.admin_token
+        return {"Authorization": f"Bearer {token}"}
+
     def setup_asset(self, status="TRADING", unlock_in_future=False):
+        if not self.admin_token:
+            self.register_user("admin")
+            
         log(f"Setting up asset with status {status}...")
         unlock_ts = int(time.time()) + 3600 if unlock_in_future else int(time.time()) - 60
         asset_data = {
@@ -53,16 +73,16 @@ class ExtendedScenariosTest:
             "ipoPrice": 100.0,
             "tradeUnlockTimestamp": unlock_ts
         }
-        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/assets", json=asset_data)
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/assets", json=asset_data, headers=self.get_auth_header())
         asset = resp.json()
         aid = asset.get("id")
         
         # Set status via Kafka (indirectly via Gateway endpoint)
         if status == "IPO_ACTIVE":
-            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/start", params={"assetId": aid})
+            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/start", params={"assetId": aid}, headers=self.get_auth_header())
         elif status == "TRADING":
-            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/start", params={"assetId": aid})
-            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/finalize", params={"assetId": aid})
+            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/start", params={"assetId": aid}, headers=self.get_auth_header())
+            requests.post(f"{GATEWAY_URL}/api/v1/admin/ipo/finalize", params={"assetId": aid}, headers=self.get_auth_header())
         
         log(f"Created asset {aid} with status {status}")
         time.sleep(2) # Wait for sync
@@ -72,7 +92,7 @@ class ExtendedScenariosTest:
         log("--- TEST: KYC REJECTED TRADING ---")
         uid = self.register_user("kyc_rejected")
         # Reject KYC
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": False})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": False}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset()
@@ -80,7 +100,7 @@ class ExtendedScenariosTest:
         # Try buy
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("kyc_rejected"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected for unverified user")
         else:
@@ -89,15 +109,15 @@ class ExtendedScenariosTest:
     def test_account_frozen_trading(self):
         log("--- TEST: ACCOUNT FROZEN TRADING ---")
         uid = self.register_user("frozen_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/freeze", json={"userId": uid, "freeze": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/freeze", json={"userId": uid, "freeze": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset()
         
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("frozen_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected for frozen user")
         else:
@@ -106,14 +126,14 @@ class ExtendedScenariosTest:
     def test_trading_locked_by_timestamp(self):
         log("--- TEST: TRADING LOCKED BY TIMESTAMP ---")
         uid = self.register_user("timestamp_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset(unlock_in_future=True)
         
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("timestamp_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected due to time lock")
         else:
@@ -122,7 +142,7 @@ class ExtendedScenariosTest:
     def test_ipo_restrictions(self):
         log("--- TEST: IPO RESTRICTIONS ---")
         uid = self.register_user("ipo_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset(status="IPO_ACTIVE")
@@ -131,7 +151,7 @@ class ExtendedScenariosTest:
         log("Attempting SELL during IPO...")
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "SELL", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("ipo_user"))
         if resp.status_code != 202:
             log("SUCCESS: Sell rejected during IPO")
         else:
@@ -141,7 +161,7 @@ class ExtendedScenariosTest:
         log("Attempting BUY with wrong price during IPO...")
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 150.0
-        })
+        }, headers=self.get_auth_header("ipo_user"))
         if resp.status_code != 202:
             log("SUCCESS: Wrong price rejected during IPO")
         else:
@@ -150,14 +170,14 @@ class ExtendedScenariosTest:
     def test_platform_inactive(self):
         log("--- TEST: PLATFORM INACTIVE (IPO_PLANNED) ---")
         uid = self.register_user("inactive_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset(status="IPO_PLANNED")
         
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("inactive_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected for IPO_PLANNED asset")
         else:
@@ -175,7 +195,7 @@ class ExtendedScenariosTest:
             "title": "Expansion Proposal",
             "options": ["Yes", "No"]
         }
-        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/vote", json=vote_data)
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/vote", json=vote_data, headers=self.get_auth_header())
         if resp.status_code != 200:
             error(f"Failed to start vote: {resp.text}")
             return
@@ -186,15 +206,15 @@ class ExtendedScenariosTest:
         # 2. Cast Vote
         log("Casting vote...")
         cast_data = {"userId": uid, "optionIndex": 0}
-        resp = requests.post(f"{GATEWAY_URL}/api/v1/votes/{action_id}/cast", json=cast_data)
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/votes/{action_id}/cast", json=cast_data, headers=self.get_auth_header("voter"))
         if resp.status_code == 202:
             log("SUCCESS: Vote cast accepted")
         else:
             error(f"FAILURE: Vote cast rejected: {resp.status_code} - {resp.text}")
 
-        # 3. Double Voting (Should be handled on-chain, but we check if Gateway accepts second request)
+        # 3. Double Voting
         log("Casting vote again (Double Voting test)...")
-        resp = requests.post(f"{GATEWAY_URL}/api/v1/votes/{action_id}/cast", json=cast_data)
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/votes/{action_id}/cast", json=cast_data, headers=self.get_auth_header("voter"))
         if resp.status_code == 202:
             log("SUCCESS: Second vote request accepted (On-chain will prevent it)")
         else:
@@ -203,7 +223,7 @@ class ExtendedScenariosTest:
     def test_investor_limit(self):
         log("--- TEST: INVESTOR LIMIT (RETAIL) ---")
         uid = self.register_user("limit_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset()
@@ -212,7 +232,7 @@ class ExtendedScenariosTest:
         log("Attempting order exceeding 600,000 RUB limit...")
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 7000, "price": 100.0
-        })
+        }, headers=self.get_auth_header("limit_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected due to investment limit")
         else:
@@ -227,7 +247,7 @@ class ExtendedScenariosTest:
         log("Testing zero amount...")
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 0, "price": 100.0
-        })
+        }, headers=self.get_auth_header("param_user"))
         if resp.status_code != 202:
             log("SUCCESS: Zero amount rejected (or handled by gateway)")
         else:
@@ -237,7 +257,7 @@ class ExtendedScenariosTest:
         log("Testing negative price...")
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": -10.0
-        })
+        }, headers=self.get_auth_header("param_user"))
         if resp.status_code != 202:
             log("SUCCESS: Negative price rejected")
         else:
@@ -246,16 +266,16 @@ class ExtendedScenariosTest:
     def test_aml_risk_rejection(self):
         log("--- TEST: AML RISK REJECTION ---")
         uid = self.register_user("risky_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         # Set high risk score
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/risk", json={"userId": uid, "score": 85})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/risk", json={"userId": uid, "score": 85}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset()
         
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("risky_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected due to high AML risk")
         else:
@@ -264,18 +284,18 @@ class ExtendedScenariosTest:
     def test_asset_suspension(self):
         log("--- TEST: ASSET SUSPENSION ---")
         uid = self.register_user("suspend_test_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
         aid = self.setup_asset()
         
         # Suspend asset
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/assets/suspend", params={"assetId": aid})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/assets/suspend", params={"assetId": aid}, headers=self.get_auth_header())
         time.sleep(2) # Wait for sync
         
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
-        })
+        }, headers=self.get_auth_header("suspend_test_user"))
         if resp.status_code != 202:
             log("SUCCESS: Order rejected for suspended asset")
         else:
@@ -284,23 +304,15 @@ class ExtendedScenariosTest:
     def test_volatility_spike(self):
         log("--- TEST: VOLATILITY SPIKE ---")
         uid = self.register_user("vol_user")
-        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)
         
-        aid = self.setup_asset() # Default is TRADING
-        
-        # 1. Establish price history (mocked via actual executions, but here we just send orders)
-        # Note: VolatilityCheckService updates price only ON EXECUTION.
-        # Since we don't have a real matching engine in this mock, we might need a way to mock execution.
-        # However, we can test if the gateway/engine handles it if we assume some history exists.
+        aid = self.setup_asset() 
         
         log("Attempting order with 50% price jump (from 100 to 150)...")
-        # Volatility threshold is 20%
         resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 150.0
-        })
-        # If there's no history, it might accept it. 
-        # But if the engine has history, it should eventually reject or log.
+        }, headers=self.get_auth_header("vol_user"))
         log(f"Order status: {resp.status_code}")
 
     def test_dividend_payout(self):
@@ -311,7 +323,7 @@ class ExtendedScenariosTest:
             "assetId": aid,
             "amount": 1.5
         }
-        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/dividends", json=div_data)
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/dividends", json=div_data, headers=self.get_auth_header())
         if resp.status_code == 200:
             log("SUCCESS: Dividend payout triggered")
         else:

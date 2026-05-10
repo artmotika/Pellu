@@ -3,3 +3,4 @@
 build
 smart-contract/target
 smart-contract/Cargo.lock
+*.log

@@ -57,7 +57,7 @@ public class OrderIntegrationTest {
                 .walletAddress("wallet123")
                 .kycStatus(KycStatus.APPROVED)
                 .amlRiskScore(0)
-                .isQualified(true) // Bypass investor limit validator for simplicity
+                .qualified(true) // Bypass investor limit validator for simplicity
                 .build();
 
         mockServer.expect(requestTo("http://auth-service:8083/api/v1/auth/users/u1"))

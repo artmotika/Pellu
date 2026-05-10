@@ -1,5 +1,6 @@
 package org.artmotika.tradingengineservice.service;
 
+import org.artmotika.tradingengineservice.config.TradingProperties;
 import org.artmotika.tradingengineservice.exception.PriceVolatilityException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +16,10 @@ class VolatilityCheckServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Threshold 20%, window size 5
-        volatilityCheckService = new VolatilityCheckService(new BigDecimal("0.20"), 5);
+        TradingProperties props = new TradingProperties();
+        props.getVolatility().setThreshold(new BigDecimal("0.20"));
+        props.getVolatility().setWindowSize(5);
+        volatilityCheckService = new VolatilityCheckService(props);
     }
 
     @Test

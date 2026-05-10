@@ -40,6 +40,13 @@ app:
   platform:
     token-account: ${PLATFORM_TOKEN_ACCOUNT:Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS}
 
+trading:
+  volatility:
+    threshold: 0.20
+    window-size: 10
+  app:
+    platform-wallet: Platform111111111111111111111111111111111
+
 management:
   endpoints:
     web:

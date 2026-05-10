@@ -29,10 +29,9 @@ public class CorporateActionService {
     private String platformTokenAccount;
 
     @org.springframework.kafka.annotation.KafkaListener(topics = "dividend.trigger", groupId = "trading-engine-group")
-    public void handleDividendTrigger(Map<String, Object> event) {
-        String assetId = (String) event.get("assetId");
-        BigDecimal amount = new BigDecimal(event.get("amount").toString());
-        triggerDividend(assetId, amount);
+    public void handleDividendTrigger(org.artmotika.common.dto.DividendTriggerRequestDto req) {
+        log.info("Processing dividend trigger for asset {}: {} per share", req.getAssetId(), req.getAmount());
+        triggerDividend(req.getAssetId(), req.getAmount());
     }
 
     public void triggerDividend(String assetId, BigDecimal amountPerShare) {

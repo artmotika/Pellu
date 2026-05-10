@@ -14,6 +14,6 @@ public class UserDto {
     private String walletAddress;
     private KycStatus kycStatus;
     private Integer amlRiskScore;
-    private boolean isQualified;
-    private boolean isFrozen;
+    private boolean qualified;
+    private boolean frozen;
 }

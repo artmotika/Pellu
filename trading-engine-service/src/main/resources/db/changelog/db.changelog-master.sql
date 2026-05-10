@@ -3,6 +3,9 @@
 --changeset initial:3
 -- Note: users table is now managed by auth-service in its own database.
 -- We no longer have physical FK constraints to users table.
+-- validCheckSum: 9:97bc8f3b8f9264233c471ae60960ba99
+-- validCheckSum: 9:f97a247882897b7eb48aa0047b1652fb
+
 
 CREATE TABLE IF NOT EXISTS assets (
     id VARCHAR(255) PRIMARY KEY,
@@ -67,6 +70,8 @@ CREATE TABLE IF NOT EXISTS user_balances (
     last_update TIMESTAMP NOT NULL
 );
 
-ALTER TABLE orders ADD COLUMN wallet_address VARCHAR(255);
+--changeset add_wallet_address:4
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
+ALTER TABLE user_balances ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
 
-ALTER TABLE user_balances ADD COLUMN wallet_address VARCHAR(255);
+

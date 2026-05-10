@@ -13,6 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final org.artmotika.authservice.mapper.UserMapper userMapper;
 
     @PostMapping("/register")
     public ResponseEntity<Map<String, String>> register(@RequestBody Map<String, String> req) {
@@ -35,14 +36,6 @@ public class AuthController {
     @GetMapping("/users/{id}")
     public ResponseEntity<org.artmotika.common.dto.UserDto> getUser(@PathVariable String id) {
         org.artmotika.authservice.model.User user = authService.getUser(id);
-        org.artmotika.common.dto.UserDto dto = org.artmotika.common.dto.UserDto.builder()
-                .id(user.getId())
-                .walletAddress(user.getWalletAddress())
-                .kycStatus(user.getKycStatus())
-                .amlRiskScore(user.getAmlRiskScore())
-                .isQualified(user.isQualified())
-                .isFrozen(user.isFrozen())
-                .build();
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(userMapper.toDto(user));
     }
 }

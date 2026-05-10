@@ -11,7 +11,7 @@
 1.  **Запустите контейнер с валидатором:**
     Откройте терминал и выполните команду:
     ```bash
-    docker run -d --name solana-validator -p 8899:8899 -p 8900:8900 -p 9900:9900 solanalabs/solana:v1.18.15 solana-test-validator
+    docker run -d --name solana-validator -p 8899:8899 -p 8900:8900 -p 9900:9900 solanalabs/solana:v1.18.15 solana-test-validator --limit-ledger-size 20000000 --no-bpf-jit --slots-per-epoch 100 --log-history-max-files 5
     ```
     *Эта команда скачает образ и запустит блокчейн в фоновом режиме.*
 

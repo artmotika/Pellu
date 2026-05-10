@@ -12,3 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 --changeset add_is_frozen:2
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_frozen BOOLEAN DEFAULT FALSE;
+
+--changeset add_role:3
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'ROLE_USER';
+

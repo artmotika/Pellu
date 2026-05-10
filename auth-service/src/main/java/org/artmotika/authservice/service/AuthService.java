@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.artmotika.authservice.model.User;
 import org.artmotika.authservice.repo.UserRepository;
 import org.artmotika.common.dto.KycStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,13 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final KafkaTemplate<String, String> kafkaTemplate;
-    private static final SecretKey KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    @Value("${app.security.jwt.secret}")
+    private String secretKey;
+
+    private SecretKey getSignInKey() {
+        byte[] keyBytes = io.jsonwebtoken.io.Decoders.BASE64.decode(secretKey);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
 
     public User getUser(String id) {
         return userRepository.findById(id).orElseThrow();
@@ -33,6 +40,7 @@ public class AuthService {
                 .walletAddress(wallet)
                 .kycStatus(KycStatus.PENDING)
                 .amlRiskScore(0)
+                .role(wallet.startsWith("ADMIN") ? "ROLE_ADMIN" : "ROLE_USER")
                 .password(passwordEncoder.encode(password))
                 .build();
         userRepository.save(user);
@@ -55,7 +63,7 @@ public class AuthService {
                 .id(UUID.randomUUID().toString())
                 .walletAddress(mockWallet)
                 .kycStatus(KycStatus.APPROVED) // ESIA users are pre-verified
-                .isQualified(false)    // Default to retail investor
+                .qualified(false)    // Default to retail investor
                 .amlRiskScore(0)
                 .password(passwordEncoder.encode("ESIA_OAUTH_" + code))
                 .build();
@@ -69,9 +77,10 @@ public class AuthService {
                 .setSubject(user.getId())
                 .claim("wallet", user.getWalletAddress())
                 .claim("kycStatus", user.getKycStatus())
+                .claim("role", user.getRole())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 86400000))
-                .signWith(KEY)
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 }

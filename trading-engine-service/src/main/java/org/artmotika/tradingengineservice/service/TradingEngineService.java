@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.artmotika.common.dto.AssetDto;
 import org.artmotika.common.dto.AssetStatus;
 import org.artmotika.common.dto.OrderRequestDto;
+import org.artmotika.tradingengineservice.config.TradingProperties;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.dto.ValidatedOrderEventDto;
 import org.artmotika.tradingengineservice.model.Asset;
@@ -35,6 +36,7 @@ public class TradingEngineService {
     private final VolatilityCheckService volatilityCheckService;
     private final TaxAgentService taxAgentService;
     private final BalanceService balanceService;
+    private final TradingProperties tradingProperties;
 
     @KafkaListener(topics = "assets.created", groupId = "trading-engine-group")
     public void handleAssetCreated(AssetDto event) {
@@ -82,9 +84,6 @@ public class TradingEngineService {
         log.info("Asset {} status updated to {}", assetId, status);
     }
 
-    @Value("${app.platform.wallet:Platform111111111111111111111111111111111}")
-    private String platformWallet;
-
     @KafkaListener(topics = "orders.created", groupId = "trading-engine-group")
     public void consumeOrder(OrderRequestDto dto) {
         // Use external volatility check service
@@ -110,9 +109,9 @@ public class TradingEngineService {
         
         if (order.getType() == Order.OrderType.SELL) {
             event.setSellerWallet(order.getWalletAddress());
-            event.setBuyerWallet(platformWallet);
+            event.setBuyerWallet(tradingProperties.getApp().getPlatformWallet());
         } else {
-            event.setSellerWallet(platformWallet);
+            event.setSellerWallet(tradingProperties.getApp().getPlatformWallet());
             event.setBuyerWallet(order.getWalletAddress());
         }
         

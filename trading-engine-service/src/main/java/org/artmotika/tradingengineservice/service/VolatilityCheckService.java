@@ -3,8 +3,8 @@ package org.artmotika.tradingengineservice.service;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
+import org.artmotika.tradingengineservice.config.TradingProperties;
 import org.artmotika.tradingengineservice.exception.PriceVolatilityException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -16,17 +16,13 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class VolatilityCheckService {
 
-    private final BigDecimal volatilityThreshold;
-    private final int windowSize;
+    private final TradingProperties tradingProperties;
 
     // High-performance in-memory price tracking
     private final Cache<String, LinkedList<BigDecimal>> priceCache;
 
-    public VolatilityCheckService(
-            @Value("${trading.volatility.threshold:0.20}") BigDecimal volatilityThreshold,
-            @Value("${trading.volatility.window-size:10}") int windowSize) {
-        this.volatilityThreshold = volatilityThreshold;
-        this.windowSize = windowSize;
+    public VolatilityCheckService(TradingProperties tradingProperties) {
+        this.tradingProperties = tradingProperties;
         this.priceCache = Caffeine.newBuilder()
                 .expireAfterAccess(1, TimeUnit.HOURS)
                 .maximumSize(1000)
@@ -40,11 +36,11 @@ public class VolatilityCheckService {
             BigDecimal avg = sum.divide(new BigDecimal(prices.size()), 4, RoundingMode.HALF_UP);
 
             BigDecimal diff = currentPrice.subtract(avg).abs();
-            BigDecimal thresholdAmount = avg.multiply(volatilityThreshold);
+            BigDecimal thresholdAmount = avg.multiply(tradingProperties.getVolatility().getThreshold());
 
             if (diff.compareTo(thresholdAmount) > 0) {
                 log.warn("Price spike detected for asset {}: current={}, avg={}, threshold={}%",
-                        assetId, currentPrice, avg, volatilityThreshold.multiply(new BigDecimal("100")));
+                        assetId, currentPrice, avg, tradingProperties.getVolatility().getThreshold().multiply(new BigDecimal("100")));
                 throw new PriceVolatilityException("Price spike detected. Risk check failed.");
             }
         }
@@ -52,7 +48,7 @@ public class VolatilityCheckService {
 
     public synchronized void updatePrice(String assetId, BigDecimal price) {
         LinkedList<BigDecimal> prices = priceCache.get(assetId, k -> new LinkedList<>());
-        if (prices.size() >= windowSize) {
+        if (prices.size() >= tradingProperties.getVolatility().getWindowSize()) {
             prices.removeFirst();
         }
         prices.addLast(price);

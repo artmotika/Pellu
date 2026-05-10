@@ -34,7 +34,15 @@ public class AmlKycService {
         System.out.println("DEBUG: User found, wallet: " + user.getWalletAddress());
         order.setWalletAddress(user.getWalletAddress());
 
-        validators.forEach(v -> v.validate(order, user));
+        validators.forEach(v -> {
+            System.out.println("DEBUG: Running validator: " + v.getClass().getSimpleName());
+            try {
+                v.validate(order, user);
+            } catch (Exception e) {
+                System.out.println("DEBUG: Validator " + v.getClass().getSimpleName() + " threw: " + e.getMessage());
+                throw e;
+            }
+        });
 
         System.out.println("DEBUG: Sending to Kafka: " + order);
         kafkaTemplate.send("orders.created", order);

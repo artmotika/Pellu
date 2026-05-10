@@ -1,9 +1,7 @@
 package org.artmotika.apigatewayservice.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.artmotika.common.dto.AssetDto;
-import org.artmotika.common.dto.AssetStatus;
-import org.artmotika.common.dto.AssetType;
+import org.artmotika.common.dto.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -17,21 +15,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminController {
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final org.artmotika.apigatewayservice.mapper.AdminMapper adminMapper;
 
     @PostMapping("/assets")
-    public ResponseEntity<AssetDto> createAsset(@RequestBody Map<String, Object> req) {
-        AssetDto asset = AssetDto.builder()
-                .id(UUID.randomUUID().toString())
-                .name((String) req.get("name"))
-                .totalSupply(((Number) req.get("totalSupply")).longValue())
-                .type(AssetType.valueOf((String) req.get("type")))
-                .status(AssetStatus.IPO_PLANNED)
-                .ipoPrice(new BigDecimal(req.get("ipoPrice").toString()))
-                .legalDocHash((String) req.getOrDefault("legalDocHash", "MOCK_HASH"))
-                .tradeUnlockTimestamp(((Number) req.getOrDefault("tradeUnlockTimestamp", System.currentTimeMillis() / 1000 + 3600)).longValue())
-                .solanaMintAddress("MOCK_MINT_" + UUID.randomUUID().toString().substring(0, 8))
-                .build();
-
+    public ResponseEntity<AssetDto> createAsset(@RequestBody AssetCreateRequestDto req) {
+        AssetDto asset = adminMapper.toAssetDto(req);
         kafkaTemplate.send("assets.created", asset);
         return ResponseEntity.ok(asset);
     }
@@ -55,41 +43,40 @@ public class AdminController {
     }
 
     @PostMapping("/vote")
-    public ResponseEntity<Map<String, String>> startVote(@RequestBody Map<String, Object> req) {
-        Map<String, Object> mutableReq = new java.util.HashMap<>(req);
-        String actionId = (String) mutableReq.getOrDefault("actionId", UUID.randomUUID().toString());
-        mutableReq.put("actionId", actionId);
+    public ResponseEntity<Map<String, String>> startVote(@RequestBody VoteCreateRequestDto req) {
+        String actionId = req.getActionId() != null ? req.getActionId() : UUID.randomUUID().toString();
+        req.setActionId(actionId);
         
-        kafkaTemplate.send("vote.started", mutableReq);
+        kafkaTemplate.send("vote.started", req);
         return ResponseEntity.ok(Map.of("actionId", actionId, "status", "Voting initiated"));
     }
 
     @PostMapping("/kyc")
-    public ResponseEntity<String> updateKyc(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> updateKyc(@RequestBody KycUpdateRequestDto req) {
         kafkaTemplate.send("kyc.updated", req);
         return ResponseEntity.ok("KYC Update command sent");
     }
 
     @PostMapping("/freeze")
-    public ResponseEntity<String> freeze(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> freeze(@RequestBody FreezeRequestDto req) {
         kafkaTemplate.send("aml.frozen", req);
         return ResponseEntity.ok("Freeze command sent");
     }
 
     @PostMapping("/clawback")
-    public ResponseEntity<String> clawback(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> clawback(@RequestBody ClawbackRequestDto req) {
         kafkaTemplate.send("admin.clawback", req);
         return ResponseEntity.ok("Clawback command sent");
     }
 
     @PostMapping("/risk")
-    public ResponseEntity<String> updateRiskScore(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> updateRiskScore(@RequestBody RiskScoreUpdateRequestDto req) {
         kafkaTemplate.send("aml.risk_score.updated", req);
         return ResponseEntity.ok("Risk score update command sent");
     }
 
     @PostMapping("/dividends")
-    public ResponseEntity<String> triggerDividend(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<String> triggerDividend(@RequestBody DividendTriggerRequestDto req) {
         kafkaTemplate.send("dividend.trigger", req);
         return ResponseEntity.ok("Dividend trigger command sent");
     }

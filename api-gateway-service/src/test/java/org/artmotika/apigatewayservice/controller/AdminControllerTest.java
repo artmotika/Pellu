@@ -1,6 +1,7 @@
 package org.artmotika.apigatewayservice.controller;
 
-import org.artmotika.common.dto.AssetDto;
+import org.artmotika.common.dto.*;
+import org.artmotika.apigatewayservice.mapper.AdminMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,20 +23,29 @@ import static org.mockito.Mockito.*;
 class AdminControllerTest {
 
     @Mock private KafkaTemplate<String, Object> kafkaTemplate;
+    @Mock private AdminMapper adminMapper;
 
     @InjectMocks
     private AdminController adminController;
 
     @Test
     void createAsset_ShouldSendEvent() {
-        Map<String, Object> req = Map.of(
-                "name", "Test Asset",
-                "totalSupply", 1000000L,
-                "type", "EQUITY",
-                "ipoPrice", "10.50",
-                "legalDocHash", "HASH123",
-                "tradeUnlockTimestamp", 1700000000L
-        );
+        AssetCreateRequestDto req = AssetCreateRequestDto.builder()
+                .name("Test Asset")
+                .totalSupply(1000000L)
+                .type(AssetType.EQUITY)
+                .ipoPrice(new BigDecimal("10.50"))
+                .legalDocHash("HASH123")
+                .tradeUnlockTimestamp(1700000000L)
+                .build();
+
+        AssetDto mockDto = AssetDto.builder()
+                .id("a1")
+                .name("Test Asset")
+                .legalDocHash("HASH123")
+                .build();
+
+        when(adminMapper.toAssetDto(any())).thenReturn(mockDto);
 
         ResponseEntity<AssetDto> response = adminController.createAsset(req);
 
@@ -63,15 +74,22 @@ class AdminControllerTest {
 
     @Test
     void startVote_ShouldSendEvent() {
-        Map<String, Object> req = Map.of("assetId", "a1", "title", "Split?");
+        VoteCreateRequestDto req = VoteCreateRequestDto.builder()
+                .assetId("a1")
+                .title("Split?")
+                .build();
         ResponseEntity<Map<String, String>> response = adminController.startVote(req);
         assertEquals("Voting initiated", response.getBody().get("status"));
-        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(Map.class));
+        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any());
     }
 
     @Test
     void updateKyc_ShouldSendEvent() {
-        ResponseEntity<String> response = adminController.updateKyc(Map.of("userId", "u1", "approved", true));
+        KycUpdateRequestDto req = KycUpdateRequestDto.builder()
+                .userId("u1")
+                .approved(true)
+                .build();
+        ResponseEntity<String> response = adminController.updateKyc(req);
 
         assertEquals("KYC Update command sent", response.getBody());
         verify(kafkaTemplate, times(1)).send(eq("kyc.updated"), any());
@@ -79,14 +97,21 @@ class AdminControllerTest {
 
     @Test
     void freeze_ShouldSendEvent() {
-        ResponseEntity<String> response = adminController.freeze(Map.of("userId", "u1", "freeze", true));
+        FreezeRequestDto req = FreezeRequestDto.builder()
+                .userId("u1")
+                .freeze(true)
+                .build();
+        ResponseEntity<String> response = adminController.freeze(req);
         assertEquals("Freeze command sent", response.getBody());
         verify(kafkaTemplate, times(1)).send(eq("aml.frozen"), any());
     }
 
     @Test
     void clawback_ShouldSendEvent() {
-        ResponseEntity<String> response = adminController.clawback(Map.of("target", "t1"));
+        ClawbackRequestDto req = ClawbackRequestDto.builder()
+                .target("t1")
+                .build();
+        ResponseEntity<String> response = adminController.clawback(req);
         assertEquals("Clawback command sent", response.getBody());
         verify(kafkaTemplate, times(1)).send(eq("admin.clawback"), any());
     }

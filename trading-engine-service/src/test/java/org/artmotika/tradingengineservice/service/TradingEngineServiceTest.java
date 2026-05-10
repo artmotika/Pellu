@@ -4,6 +4,7 @@ import org.artmotika.common.dto.AssetDto;
 import org.artmotika.common.dto.AssetStatus;
 import org.artmotika.common.dto.AssetType;
 import org.artmotika.common.dto.OrderRequestDto;
+import org.artmotika.tradingengineservice.config.TradingProperties;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
@@ -37,6 +38,7 @@ class TradingEngineServiceTest {
     @Mock private VolatilityCheckService volatilityCheckService;
     @Mock private TaxAgentService taxAgentService;
     @Mock private BalanceService balanceService;
+    @Mock private TradingProperties tradingProperties;
 
     @InjectMocks
     private TradingEngineService tradingEngineService;
@@ -75,7 +77,9 @@ class TradingEngineServiceTest {
 
     @Test
     void consumeOrder_ShouldValidateAndSavePendingOrder() {
-        org.springframework.test.util.ReflectionTestUtils.setField(tradingEngineService, "platformWallet", "platform_w");
+        TradingProperties.App app = mock(TradingProperties.App.class);
+        when(tradingProperties.getApp()).thenReturn(app);
+        when(app.getPlatformWallet()).thenReturn("platform_w");
         
         OrderRequestDto dto = new OrderRequestDto();
         dto.setUserId("u1"); 

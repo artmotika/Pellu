@@ -16,6 +16,9 @@ public class User {
     private KycStatus kycStatus; 
     private Integer amlRiskScore;
     private String password; // hashed
-    private boolean isQualified; // true = Qualified Investor
-    private boolean isFrozen;
+    private String role; // e.g., "ROLE_USER", "ROLE_ADMIN"
+    @Column(name = "is_qualified")
+    private boolean qualified; // true = Qualified Investor
+    @Column(name = "is_frozen")
+    private boolean frozen;
 }
