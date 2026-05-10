@@ -109,7 +109,9 @@ class AdminControllerTest {
     @Test
     void clawback_ShouldSendEvent() {
         ClawbackRequestDto req = ClawbackRequestDto.builder()
-                .target("t1")
+                .assetId("a1")
+                .userId("u1")
+                .amount(BigDecimal.TEN)
                 .build();
         ResponseEntity<String> response = adminController.clawback(req);
         assertEquals("Clawback command sent", response.getBody());

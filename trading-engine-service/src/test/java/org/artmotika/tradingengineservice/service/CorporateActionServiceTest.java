@@ -1,5 +1,7 @@
 package org.artmotika.tradingengineservice.service;
 
+import org.artmotika.common.dto.DividendPayoutEventDto;
+import org.artmotika.common.dto.VoteStartedEventDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.UserBalance;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
@@ -13,7 +15,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -48,11 +49,11 @@ class CorporateActionServiceTest {
 
         corporateActionService.triggerDividend(assetId, new BigDecimal("2.5"));
 
-        verify(kafkaTemplate, times(1)).send(eq("dividend.payout"), argThat(map -> {
-            Map m = (Map) map;
-            return m.get("userId").equals("u1") && 
-                   m.get("userWallet").equals("wallet1") &&
-                   m.get("amount").equals(250L);
+        verify(kafkaTemplate, times(1)).send(eq("dividend.payout"), argThat(event -> {
+            DividendPayoutEventDto e = (DividendPayoutEventDto) event;
+            return e.getUserId().equals("u1") && 
+                   e.getUserWallet().equals("wallet1") &&
+                   e.getAmount() == 250L;
         }));
         verify(corporateActionRepository, times(2)).save(any());
     }
@@ -65,7 +66,7 @@ class CorporateActionServiceTest {
 
         corporateActionService.triggerVote(assetId, "Split?", List.of("Yes", "No"));
 
-        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(Map.class));
+        verify(kafkaTemplate, times(1)).send(eq("vote.started"), any(VoteStartedEventDto.class));
         verify(corporateActionRepository, times(2)).save(any());
     }
 }

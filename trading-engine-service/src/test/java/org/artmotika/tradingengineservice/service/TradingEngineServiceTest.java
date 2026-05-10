@@ -1,9 +1,6 @@
 package org.artmotika.tradingengineservice.service;
 
-import org.artmotika.common.dto.AssetDto;
-import org.artmotika.common.dto.AssetStatus;
-import org.artmotika.common.dto.AssetType;
-import org.artmotika.common.dto.OrderRequestDto;
+import org.artmotika.common.dto.*;
 import org.artmotika.tradingengineservice.config.TradingProperties;
 import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.model.Asset;
@@ -18,14 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
-import org.artmotika.common.dto.OrderType;
-
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +34,8 @@ class TradingEngineServiceTest {
     @Mock private TaxAgentService taxAgentService;
     @Mock private BalanceService balanceService;
     @Mock private TradingProperties tradingProperties;
+    @Mock private StatePublishService statePublishService;
+    @Mock private org.artmotika.tradingengineservice.mapper.AssetMapper assetMapper;
 
     @InjectMocks
     private TradingEngineService tradingEngineService;
@@ -60,6 +57,7 @@ class TradingEngineServiceTest {
             asset.getName().equals("Gold") && 
             asset.getStatus() == AssetStatus.IPO_PLANNED
         ));
+        verify(statePublishService).updateAsset(event);
     }
 
     @Test
@@ -68,11 +66,13 @@ class TradingEngineServiceTest {
         asset.setId("a1");
         asset.setStatus(AssetStatus.IPO_PLANNED);
         when(assetRepository.findById("a1")).thenReturn(Optional.of(asset));
+        when(assetMapper.toDto(any())).thenReturn(new AssetDto());
 
-        tradingEngineService.handleIpoStatusUpdate(Map.of("assetId", "a1", "status", "IPO_ACTIVE"));
+        tradingEngineService.handleIpoStatusUpdate(new IpoStatusUpdateDto("a1", AssetStatus.IPO_ACTIVE));
 
         assertEquals(AssetStatus.IPO_ACTIVE, asset.getStatus());
         verify(assetRepository, times(1)).save(asset);
+        verify(statePublishService).updateAsset(any());
     }
 
     @Test

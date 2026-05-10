@@ -1,10 +1,10 @@
 package org.artmotika.solanaconnectorservice.service;
 
-import org.artmotika.common.dto.AssetDto;
-import org.artmotika.solanaconnectorservice.dto.VotingEventDto;
-import org.artmotika.solanaconnectorservice.dto.ValidatedOrderEventDto;
+import org.artmotika.common.dto.*;
+import org.artmotika.solanaconnectorservice.dto.ClawbackEventDto;
 import org.artmotika.solanaconnectorservice.dto.ExecutionResultDto;
 import org.artmotika.solanaconnectorservice.dto.KycUpdateEventDto;
+import org.artmotika.solanaconnectorservice.dto.ValidatedOrderEventDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,18 +14,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SolanaBlockchainServiceTest {
 
-    private static final String VALID_PUBKEY = "vines1vzrYbzduYv9bP5McaS1quZ756C87S9ER69s9P";
+    private static final String VALID_PUBKEY = "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R";
 
     @Mock
     private KafkaTemplate<String, ExecutionResultDto> kafkaTemplate;
@@ -38,19 +35,26 @@ class SolanaBlockchainServiceTest {
 
     @BeforeEach
     void setUp() {
-        org.artmotika.solanaconnectorservice.config.SolanaProperties.Program program = mock(org.artmotika.solanaconnectorservice.config.SolanaProperties.Program.class);
-        when(program.getId()).thenReturn("Dfa1111111111111111111111111111111111111111");
-        when(program.getTokenProgramId()).thenReturn("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-        when(program.getAssociatedTokenProgramId()).thenReturn("ATokenGPvbdQxrXJw2Qy7u7L8xN8yA9f9f9f9f9f9f9");
-        when(program.getSystemProgramId()).thenReturn("11111111111111111111111111111111");
+        org.artmotika.solanaconnectorservice.config.SolanaProperties.Program program = new org.artmotika.solanaconnectorservice.config.SolanaProperties.Program();
+        program.setId(VALID_PUBKEY);
+        program.setTokenProgramId(VALID_PUBKEY);
+        program.setAssociatedTokenProgramId(VALID_PUBKEY);
+        program.setSystemProgramId(VALID_PUBKEY);
         
-        org.artmotika.solanaconnectorservice.config.SolanaProperties.Admin admin = mock(org.artmotika.solanaconnectorservice.config.SolanaProperties.Admin.class);
-        when(admin.getPrivateKey()).thenReturn("");
+        org.artmotika.solanaconnectorservice.config.SolanaProperties.Admin admin = new org.artmotika.solanaconnectorservice.config.SolanaProperties.Admin();
+        admin.setPrivateKey("3JhdAWiLtwKzjiqamDsNRz54QnvFs7myEYvYQiuAccWraULzxouRjiqnXinscEfymSdvDrSNTaPCW4xDBTYANov9");
+
+        org.artmotika.solanaconnectorservice.config.SolanaProperties.Pda pda = new org.artmotika.solanaconnectorservice.config.SolanaProperties.Pda();
+        pda.setPrefix(Map.of(
+            "registry", "registry",
+            "voting", "voting",
+            "user", "user"
+        ));
 
         when(solanaProperties.getProgram()).thenReturn(program);
         when(solanaProperties.getAdmin()).thenReturn(admin);
-        when(solanaProperties.getRpcUrl()).thenReturn("https://api.devnet.solana.com");
-        
+        when(solanaProperties.getRpcUrl()).thenReturn("http://localhost:8899");
+        when(solanaProperties.getPda()).thenReturn(pda);
         when(solanaProperties.getDiscriminators()).thenReturn(Map.of(
             "create-asset", List.of(0, 0, 0, 0, 0, 0, 0, 0),
             "toggle-ipo", List.of(0, 0, 0, 0, 0, 0, 0, 0),
@@ -58,14 +62,6 @@ class SolanaBlockchainServiceTest {
             "update-kyc", List.of(0, 0, 0, 0, 0, 0, 0, 0),
             "dividend-payout", List.of(0, 0, 0, 0, 0, 0, 0, 0)
         ));
-
-        org.artmotika.solanaconnectorservice.config.SolanaProperties.Pda pda = mock(org.artmotika.solanaconnectorservice.config.SolanaProperties.Pda.class);
-        when(pda.getPrefix()).thenReturn(Map.of(
-            "registry", "registry",
-            "voting", "voting",
-            "user", "user"
-        ));
-        when(solanaProperties.getPda()).thenReturn(pda);
 
         solanaBlockchainService.init();
     }
@@ -82,12 +78,12 @@ class SolanaBlockchainServiceTest {
 
     @Test
     void toggleIpoOnChain_ShouldNotCrash() {
-        solanaBlockchainService.toggleIpoOnChain(Map.of("assetId", "a1", "status", "IPO_ACTIVE"));
+        solanaBlockchainService.toggleIpoOnChain(new IpoStatusUpdateDto("a1", AssetStatus.IPO_ACTIVE));
     }
 
     @Test
     void startVotingOnChain_ShouldNotCrash() {
-        VotingEventDto event = new VotingEventDto();
+        VoteStartedEventDto event = new VoteStartedEventDto();
         event.setActionId("v1");
         event.setAssetId("a1");
         event.setTitle("Test Vote");
@@ -106,13 +102,12 @@ class SolanaBlockchainServiceTest {
 
     @Test
     void executeDividendPayout_ShouldNotCrash() {
-        Map<String, Object> event = Map.of(
-            "assetId", "a1",
-            "userWallet", VALID_PUBKEY,
-            "sourceTokenAccount", VALID_PUBKEY,
-            "userTokenAccount", VALID_PUBKEY,
-            "amount", 100L
-        );
+        DividendPayoutEventDto event = DividendPayoutEventDto.builder()
+            .assetId("a1")
+            .userWallet(VALID_PUBKEY)
+            .sourceTokenAccount(VALID_PUBKEY)
+            .amount(100L)
+            .build();
         solanaBlockchainService.executeDividendPayout(event);
     }
 }
