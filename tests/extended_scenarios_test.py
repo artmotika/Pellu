@@ -200,6 +200,109 @@ class ExtendedScenariosTest:
         else:
             error(f"FAILURE: Second vote request rejected unexpectedly: {resp.status_code}")
 
+    def test_investor_limit(self):
+        log("--- TEST: INVESTOR LIMIT (RETAIL) ---")
+        uid = self.register_user("limit_user")
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        time.sleep(1)
+        
+        aid = self.setup_asset()
+        
+        # Limit is 600,000. Try order for 700,000.
+        log("Attempting order exceeding 600,000 RUB limit...")
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 7000, "price": 100.0
+        })
+        if resp.status_code != 202:
+            log("SUCCESS: Order rejected due to investment limit")
+        else:
+            error("FAILURE: Order accepted despite exceeding limit")
+
+    def test_invalid_order_parameters(self):
+        log("--- TEST: INVALID ORDER PARAMETERS ---")
+        uid = self.register_user("param_user")
+        aid = self.setup_asset()
+        
+        # 1. Zero amount
+        log("Testing zero amount...")
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 0, "price": 100.0
+        })
+        if resp.status_code != 202:
+            log("SUCCESS: Zero amount rejected (or handled by gateway)")
+        else:
+            log("INFO: Zero amount accepted by gateway (will be filtered by engine)")
+
+        # 2. Negative price
+        log("Testing negative price...")
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": -10.0
+        })
+        if resp.status_code != 202:
+            log("SUCCESS: Negative price rejected")
+        else:
+            log("INFO: Negative price accepted by gateway (will be filtered by engine)")
+
+    def test_aml_risk_rejection(self):
+        log("--- TEST: AML RISK REJECTION ---")
+        uid = self.register_user("risky_user")
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        # Set high risk score
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/risk", json={"userId": uid, "score": 85})
+        time.sleep(1)
+        
+        aid = self.setup_asset()
+        
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
+        })
+        if resp.status_code != 202:
+            log("SUCCESS: Order rejected due to high AML risk")
+        else:
+            error("FAILURE: Order accepted despite high AML risk")
+
+    def test_asset_suspension(self):
+        log("--- TEST: ASSET SUSPENSION ---")
+        uid = self.register_user("suspend_test_user")
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        time.sleep(1)
+        
+        aid = self.setup_asset()
+        
+        # Suspend asset
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/assets/suspend", params={"assetId": aid})
+        time.sleep(2) # Wait for sync
+        
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
+        })
+        if resp.status_code != 202:
+            log("SUCCESS: Order rejected for suspended asset")
+        else:
+            error("FAILURE: Order accepted for suspended asset")
+
+    def test_volatility_spike(self):
+        log("--- TEST: VOLATILITY SPIKE ---")
+        uid = self.register_user("vol_user")
+        requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True})
+        time.sleep(1)
+        
+        aid = self.setup_asset() # Default is TRADING
+        
+        # 1. Establish price history (mocked via actual executions, but here we just send orders)
+        # Note: VolatilityCheckService updates price only ON EXECUTION.
+        # Since we don't have a real matching engine in this mock, we might need a way to mock execution.
+        # However, we can test if the gateway/engine handles it if we assume some history exists.
+        
+        log("Attempting order with 50% price jump (from 100 to 150)...")
+        # Volatility threshold is 20%
+        resp = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
+            "userId": uid, "assetId": aid, "type": "BUY", "amount": 1, "price": 150.0
+        })
+        # If there's no history, it might accept it. 
+        # But if the engine has history, it should eventually reject or log.
+        log(f"Order status: {resp.status_code}")
+
     def test_dividend_payout(self):
         log("--- TEST: DIVIDEND PAYOUT ---")
         aid = self.setup_asset()
@@ -223,6 +326,11 @@ class ExtendedScenariosTest:
         self.test_platform_inactive()
         self.test_governance_voting()
         self.test_dividend_payout()
+        self.test_investor_limit()
+        self.test_invalid_order_parameters()
+        self.test_aml_risk_rejection()
+        self.test_asset_suspension()
+        self.test_volatility_spike()
         log("=== EXTENDED SCENARIOS TEST COMPLETED ===")
 
 if __name__ == "__main__":

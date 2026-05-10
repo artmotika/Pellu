@@ -48,6 +48,12 @@ public class AdminController {
         return ResponseEntity.ok("IPO finalize command sent");
     }
 
+    @PostMapping("/assets/suspend")
+    public ResponseEntity<String> suspendAsset(@RequestParam String assetId) {
+        kafkaTemplate.send("ipo.status", Map.of("assetId", assetId, "status", AssetStatus.SUSPENDED));
+        return ResponseEntity.ok("Asset suspension command sent");
+    }
+
     @PostMapping("/vote")
     public ResponseEntity<Map<String, String>> startVote(@RequestBody Map<String, Object> req) {
         Map<String, Object> mutableReq = new java.util.HashMap<>(req);
@@ -74,6 +80,12 @@ public class AdminController {
     public ResponseEntity<String> clawback(@RequestBody Map<String, Object> req) {
         kafkaTemplate.send("admin.clawback", req);
         return ResponseEntity.ok("Clawback command sent");
+    }
+
+    @PostMapping("/risk")
+    public ResponseEntity<String> updateRiskScore(@RequestBody Map<String, Object> req) {
+        kafkaTemplate.send("aml.risk_score.updated", req);
+        return ResponseEntity.ok("Risk score update command sent");
     }
 
     @PostMapping("/dividends")

@@ -41,4 +41,16 @@ public class UserEventConsumer {
             userRepository.save(user);
         });
     }
+
+    @KafkaListener(topics = "aml.risk_score.updated", groupId = "auth-service-group")
+    public void consumeRiskScoreUpdate(Map<String, Object> event) {
+        String userId = (String) event.get("userId");
+        int score = ((Number) event.get("score")).intValue();
+        log.info("Consuming AML risk score update for user {}: {}", userId, score);
+        
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setAmlRiskScore(score);
+            userRepository.save(user);
+        });
+    }
 }
