@@ -25,20 +25,17 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponseDto> register(@RequestBody AuthRequestDto req) {
-        String token = authService.register(req.getWallet(), req.getPassword());
-        return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponseDto(token));
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(req.getWallet(), req.getPassword()));
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponseDto> login(@RequestBody AuthRequestDto req) {
-        String token = authService.login(req.getWallet(), req.getPassword());
-        return ResponseEntity.ok(new AuthResponseDto(token));
+        return ResponseEntity.ok(authService.login(req.getWallet(), req.getPassword()));
     }
 
     @PostMapping("/esia/login")
     public ResponseEntity<AuthResponseDto> loginEsia(@RequestParam String code) {
-        String token = authService.loginViaEsia(code);
-        return ResponseEntity.ok(new AuthResponseDto(token));
+        return ResponseEntity.ok(authService.loginViaEsia(code));
     }
 
     @GetMapping("/users/{id}")

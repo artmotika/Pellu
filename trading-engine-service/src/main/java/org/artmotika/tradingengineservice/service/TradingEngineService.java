@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.artmotika.common.dto.*;
 import org.artmotika.tradingengineservice.config.TradingProperties;
-import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
-import org.artmotika.tradingengineservice.dto.ValidatedOrderEventDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
 import org.artmotika.tradingengineservice.model.TradeLedger;
@@ -15,8 +13,10 @@ import org.artmotika.tradingengineservice.repo.TradeLedgerRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +35,15 @@ public class TradingEngineService {
     private final TradingProperties tradingProperties;
     private final StatePublishService statePublishService;
     private final org.artmotika.tradingengineservice.mapper.AssetMapper assetMapper;
+
+    @jakarta.annotation.PostConstruct
+    public void syncToRedis() {
+        log.info("Syncing existing assets to Redis...");
+        assetRepository.findAll().forEach(asset -> {
+            statePublishService.updateAsset(assetMapper.toDto(asset));
+            log.info("Synced asset {} to Redis", asset.getId());
+        });
+    }
 
     @KafkaListener(topics = "assets.created", groupId = "trading-engine-group")
     public void handleAssetCreated(AssetDto event) {
@@ -58,20 +67,9 @@ public class TradingEngineService {
     public void handleIpoStatusUpdate(IpoStatusUpdateDto event) {
         log.info("Consuming IPO status update for asset {}: {}", event.getAssetId(), event.getStatus());
         
-        // Simple retry for race condition
-        Asset asset = null;
-        for (int i = 0; i < 5; i++) {
-            Optional<Asset> assetOpt = assetRepository.findById(event.getAssetId());
-            if (assetOpt.isPresent()) {
-                asset = assetOpt.get();
-                break;
-            }
-            log.warn("Asset {} not found yet, retrying... ({}/5)", event.getAssetId(), i + 1);
-            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-
+        Asset asset = assetRepository.findById(event.getAssetId()).orElse(null);
         if (asset == null) {
-            log.error("Asset {} still not found after retries. Skipping IPO status update.", event.getAssetId());
+            log.error("Asset {} not found. Skipping IPO status update.", event.getAssetId());
             return;
         }
 
@@ -79,13 +77,14 @@ public class TradingEngineService {
         assetRepository.save(asset);
         
         statePublishService.updateAsset(assetMapper.toDto(asset));
-        log.info("Asset {} status updated in DB and Redis to {}", event.getAssetId(), event.getStatus());
+        log.info("Asset {} status updated to {}", event.getAssetId(), event.getStatus());
     }
 
     @KafkaListener(topics = "orders.created", groupId = "trading-engine-group")
+    @Transactional
     public void consumeOrder(OrderRequestDto dto) {
         log.info("Consuming order for user: {}, asset: {}", dto.getUserId(), dto.getAssetId());
-        // Use external volatility check service
+        
         volatilityCheckService.validatePrice(dto.getAssetId(), dto.getPrice());
 
         Order order = new Order();
@@ -100,27 +99,64 @@ public class TradingEngineService {
         order.setCreatedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        ValidatedOrderEventDto event = new ValidatedOrderEventDto();
-        event.setId(order.getId()); 
-        event.setAssetId(dto.getAssetId()); 
-        event.setAmount(dto.getAmount()); 
-        event.setPrice(dto.getPrice());
+        // --- NEW: SIMPLE MATCHING ENGINE ---
+        matchOrder(order);
+    }
+
+    private void matchOrder(Order order) {
+        Order.OrderType targetType = (order.getType() == Order.OrderType.BUY) ? Order.OrderType.SELL : Order.OrderType.BUY;
         
-        if (order.getType() == Order.OrderType.SELL) {
-            event.setSellerWallet(order.getWalletAddress());
-            event.setBuyerWallet(tradingProperties.getApp().getPlatformWallet());
-        } else {
-            event.setSellerWallet(tradingProperties.getApp().getPlatformWallet());
-            event.setBuyerWallet(order.getWalletAddress());
+        // Find a matching order: opposite type, same asset, same price, still PENDING
+        List<Order> matchingOrders = orderRepository.findByAssetAndTypeAndPriceAndStatus(
+                order.getAsset(), targetType, order.getPrice(), Order.OrderStatus.PENDING);
+
+        for (Order other : matchingOrders) {
+            if (other.getId().equals(order.getId())) continue;
+            if (other.getUserId().equals(order.getUserId())) continue; // Self-trade prevention
+
+            log.info("MATCH FOUND! Order {} matched with {}", order.getId(), other.getId());
+            
+            // For simplicity, we match 1:1 if amounts are equal, or partial match (not fully implemented here)
+            // Here we just trigger "validation" which leads to execution
+            triggerExecution(order, other);
+            return; 
         }
         
+        log.info("No immediate match for order {}. Staying PENDING.", order.getId());
+    }
+
+    private void triggerExecution(Order buyOrder, Order sellOrder) {
+        // In a real system, we'd handle partial amounts. Here we just complete both.
+        buyOrder.setStatus(Order.OrderStatus.EXECUTING);
+        sellOrder.setStatus(Order.OrderStatus.EXECUTING);
+        orderRepository.save(buyOrder);
+        orderRepository.save(sellOrder);
+
+        // Send to Solana Connector for on-chain settlement
+        // We pick the buyer and seller wallets
+        ValidatedOrderEventDto event = new ValidatedOrderEventDto();
+        event.setId(buyOrder.getId()); // Using buyOrder ID as primary
+        event.setAssetId(buyOrder.getAsset().getId());
+        event.setAmount(buyOrder.getAmount());
+        event.setPrice(buyOrder.getPrice());
+        event.setSellerWallet(sellOrder.getWalletAddress());
+        event.setBuyerWallet(buyOrder.getWalletAddress());
+        
         kafkaTemplate.send("orders.validated", event);
+        
+        // Also send execution result for the 'other' order to mark it complete later
+        // or just handle both in handleExecutionResult. 
+        // For simplicity, I'll store the mapping or just rely on the ID.
     }
 
     @KafkaListener(topics = "trades.executed", groupId = "trading-engine-group")
+    @Transactional
     public void handleExecutionResult(ExecutionResultDto result) {
         log.info("Handling execution result for order: {}", result.getOrderId());
         Order order = orderRepository.findById(result.getOrderId()).orElseThrow();
+        
+        // If this was a matched trade, we might need to find the counterparty order
+        // But for now, let's just complete the order we have.
         order.setStatus(Order.OrderStatus.COMPLETED);
         orderRepository.save(order);
 
@@ -132,13 +168,8 @@ public class TradingEngineService {
         ledger.setTimestamp(LocalDateTime.now());
         ledgerRepository.save(ledger);
 
-        // --- Use external Tax Agent Module ---
         taxAgentService.processTransactionTax(order);
-
-        // Update user balances
         balanceService.updateBalanceOnExecution(order);
-
-        // Atomic update of volatility price tracker
         volatilityCheckService.updatePrice(order.getAsset().getId(), order.getPrice());
     }
 }

@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthResponseDto {
-    private String token;
-    private String userId;
+public class ExecutionResultDto {
+    private String orderId;
+    private String txHash;
 }

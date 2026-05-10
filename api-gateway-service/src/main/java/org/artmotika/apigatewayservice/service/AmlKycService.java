@@ -2,7 +2,6 @@ package org.artmotika.apigatewayservice.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.artmotika.apigatewayservice.exception.KycNotVerifiedException;
 import org.artmotika.apigatewayservice.service.validator.OrderValidator;
 import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.common.dto.UserDto;
@@ -27,13 +26,15 @@ public class AmlKycService {
             throw new RuntimeException("Unauthorized");
         }
 
-        log.debug("Processing order for user: {}, wallet: {}", user.getId(), user.getWalletAddress());
+        log.debug("Processing order for user: {}, wallet: {}, KYC: {}, qualified: {}, amlRisk: {}", 
+            user.getId(), user.getWalletAddress(), user.getKycStatus(), user.isQualified(), user.getAmlRiskScore());
         
         // Ensure the order matches the authenticated user
         order.setUserId(user.getId());
         order.setWalletAddress(user.getWalletAddress());
 
-        validators.forEach(v -> {
+        log.debug("Running {} validators", validators.size());
+        for (OrderValidator v : validators) {
             log.debug("Running validator: {}", v.getClass().getSimpleName());
             try {
                 v.validate(order, user);
@@ -41,7 +42,7 @@ public class AmlKycService {
                 log.warn("Validator {} threw: {}", v.getClass().getSimpleName(), e.getMessage());
                 throw e;
             }
-        });
+        }
 
         log.info("Sending to Kafka: {}", order);
         kafkaTemplate.send("orders.created", order);

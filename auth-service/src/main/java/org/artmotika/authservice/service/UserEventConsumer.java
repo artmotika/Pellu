@@ -2,11 +2,9 @@ package org.artmotika.authservice.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.artmotika.authservice.model.User;
 import org.artmotika.authservice.repo.UserRepository;
-import org.artmotika.common.dto.FreezeRequestDto;
-import org.artmotika.common.dto.KycStatus;
-import org.artmotika.common.dto.KycUpdateRequestDto;
-import org.artmotika.common.dto.RiskScoreUpdateRequestDto;
+import org.artmotika.common.dto.*;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +17,12 @@ public class UserEventConsumer {
     @KafkaListener(topics = "kyc.updated", groupId = "auth-service-group")
     public void consumeKycUpdate(KycUpdateRequestDto req) {
         log.info("Consuming KYC update for user {}: {}", req.getUserId(), req.isApproved());
-        userRepository.updateKycStatus(req.getUserId(), req.isApproved() ? KycStatus.APPROVED : KycStatus.REJECTED);
+        try {
+            userRepository.updateKycStatus(req.getUserId(), req.isApproved() ? KycStatus.APPROVED : KycStatus.REJECTED);
+            log.info("KYC status updated in DB for user {}", req.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to update KYC for user {}: {}", req.getUserId(), e.getMessage());
+        }
     }
 
     @KafkaListener(topics = "aml.frozen", groupId = "auth-service-group")

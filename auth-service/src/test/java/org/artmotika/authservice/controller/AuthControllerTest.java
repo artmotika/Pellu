@@ -27,15 +27,19 @@ class AuthControllerTest {
 
     @Test
     void register_ShouldReturnToken() {
-        when(authService.register("w1", "p1")).thenReturn("token123");
+        AuthResponseDto resp = new AuthResponseDto("token123", "u1");
+        when(authService.register("w1", "p1")).thenReturn(resp);
         ResponseEntity<AuthResponseDto> result = authController.register(new AuthRequestDto("w1", "p1"));
         assertEquals("token123", result.getBody().getToken());
+        assertEquals("u1", result.getBody().getUserId());
     }
 
     @Test
     void login_ShouldReturnToken() {
-        when(authService.login("w1", "p1")).thenReturn("token123");
+        AuthResponseDto resp = new AuthResponseDto("token123", "u1");
+        when(authService.login("w1", "p1")).thenReturn(resp);
         ResponseEntity<AuthResponseDto> result = authController.login(new AuthRequestDto("w1", "p1"));
         assertEquals("token123", result.getBody().getToken());
+        assertEquals("u1", result.getBody().getUserId());
     }
 }

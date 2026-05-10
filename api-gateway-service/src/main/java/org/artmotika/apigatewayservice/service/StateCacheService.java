@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class StateCacheService {
     private final RedisTemplate<String, Object> redisTemplate;
 

@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.artmotika.common.dto.KycStatus;
 import org.artmotika.common.dto.UserDto;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -40,8 +42,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
         try {
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                Claims claims = jwtService.extractClaim(jwt, c -> c);
-                if (claims != null && jwtService.isTokenValid(jwt)) {
+                if (jwtService.isTokenValid(jwt)) {
+                    Claims claims = jwtService.extractClaim(jwt, c -> c);
+                    log.debug("JWT Validated for subject: {}", claims.getSubject());
+                    
                     UserDto user = UserDto.builder()
                             .id(claims.getSubject())
                             .walletAddress(claims.get("wallet", String.class))
@@ -50,6 +54,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             .qualified(claims.get("qualified", Boolean.class))
                             .frozen(claims.get("frozen", Boolean.class))
                             .build();
+
+                    log.debug("User Principal Created: id={}, KYC={}, Qualified={}, Frozen={}", 
+                        user.getId(), user.getKycStatus(), user.isQualified(), user.isFrozen());
 
                     String role = claims.get("role", String.class);
                     List<GrantedAuthority> authorities = role != null ? 
@@ -61,10 +68,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                    log.debug("SecurityContext updated with UserDto: {}", user.getId());
+                } else {
+                    log.warn("Invalid JWT Token");
                 }
             }
         } catch (Exception e) {
-            // Token validation failed
+            log.error("Token validation error: {}", e.getMessage());
         }
         filterChain.doFilter(request, response);
     }

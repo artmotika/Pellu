@@ -4,3 +4,6 @@ build
 smart-contract/target
 smart-contract/Cargo.lock
 *.log
+report.html
+BOOT-INF
+__pycache__

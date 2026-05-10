@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.artmotika.authservice.model.User;
 import org.artmotika.authservice.repo.UserRepository;
+import org.artmotika.common.dto.AuthResponseDto;
 import org.artmotika.common.dto.KycStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -34,7 +35,7 @@ public class AuthService {
         return userRepository.findById(id).orElseThrow();
     }
 
-    public String register(String wallet, String password) {
+    public AuthResponseDto register(String wallet, String password) {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .walletAddress(wallet)
@@ -45,18 +46,18 @@ public class AuthService {
                 .build();
         userRepository.save(user);
         kafkaTemplate.send("users.registered", user.getWalletAddress());
-        return generateToken(user);
+        return new AuthResponseDto(generateToken(user), user.getId());
     }
 
-    public String login(String wallet, String password) {
+    public AuthResponseDto login(String wallet, String password) {
         User user = userRepository.findByWalletAddress(wallet).orElseThrow();
         if (passwordEncoder.matches(password, user.getPassword())) {
-            return generateToken(user);
+            return new AuthResponseDto(generateToken(user), user.getId());
         }
         throw new RuntimeException("Invalid credentials");
     }
 
-    public String loginViaEsia(String code) {
+    public AuthResponseDto loginViaEsia(String code) {
         // MOCK: In reality, we'd exchange 'code' for an access token via ESIA API
         String mockWallet = "ESIA_" + UUID.randomUUID().toString().substring(0, 8);
         User user = User.builder()
@@ -69,7 +70,7 @@ public class AuthService {
                 .build();
         userRepository.save(user);
         kafkaTemplate.send("users.registered", user.getWalletAddress());
-        return generateToken(user);
+        return new AuthResponseDto(generateToken(user), user.getId());
     }
 
     private String generateToken(User user) {
