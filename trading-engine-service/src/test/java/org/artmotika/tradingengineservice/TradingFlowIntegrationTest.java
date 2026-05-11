@@ -2,7 +2,7 @@ package org.artmotika.tradingengineservice;
 
 import org.artmotika.common.dto.OrderRequestDto;
 import org.artmotika.common.dto.OrderType;
-import org.artmotika.tradingengineservice.dto.ValidatedOrderEventDto;
+import org.artmotika.common.dto.ValidatedOrderEventDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
@@ -19,8 +19,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,7 +66,7 @@ public class TradingFlowIntegrationTest {
             order.getStatus() == Order.OrderStatus.PENDING
         ));
 
-        // 4. Verify validation event sent to Kafka
-        verify(kafkaTemplate).send(eq("orders.validated"), any());
+        // 4. Verify validation event NOT sent if no match
+        verify(kafkaTemplate, never()).send(eq("orders.validated"), any());
     }
 }

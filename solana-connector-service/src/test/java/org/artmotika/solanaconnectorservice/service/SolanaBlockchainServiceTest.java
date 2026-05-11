@@ -2,9 +2,7 @@ package org.artmotika.solanaconnectorservice.service;
 
 import org.artmotika.common.dto.*;
 import org.artmotika.solanaconnectorservice.dto.ClawbackEventDto;
-import org.artmotika.solanaconnectorservice.dto.ExecutionResultDto;
 import org.artmotika.solanaconnectorservice.dto.KycUpdateEventDto;
-import org.artmotika.solanaconnectorservice.dto.ValidatedOrderEventDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

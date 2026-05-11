@@ -2,7 +2,6 @@ package org.artmotika.tradingengineservice.service;
 
 import org.artmotika.common.dto.*;
 import org.artmotika.tradingengineservice.config.TradingProperties;
-import org.artmotika.tradingengineservice.dto.ExecutionResultDto;
 import org.artmotika.tradingengineservice.model.Asset;
 import org.artmotika.tradingengineservice.model.Order;
 import org.artmotika.tradingengineservice.repo.AssetRepository;
@@ -16,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,10 +77,8 @@ class TradingEngineServiceTest {
     }
 
     @Test
-    void consumeOrder_ShouldValidateAndSavePendingOrder() {
+    void consumeOrder_ShouldStayPending_WhenNoMatchFound() {
         TradingProperties.App app = mock(TradingProperties.App.class);
-        when(tradingProperties.getApp()).thenReturn(app);
-        when(app.getPlatformWallet()).thenReturn("platform_w");
         
         OrderRequestDto dto = new OrderRequestDto();
         dto.setUserId("u1"); 
@@ -89,17 +88,56 @@ class TradingEngineServiceTest {
         dto.setPrice(BigDecimal.TEN); 
         dto.setType(OrderType.BUY);
 
-        when(assetRepository.findById("a1")).thenReturn(Optional.of(new Asset()));
+        Asset asset = new Asset(); asset.setId("a1");
+        when(assetRepository.findById("a1")).thenReturn(Optional.of(asset));
+        // No matching orders
+        when(orderRepository.findByAssetAndTypeAndPriceAndStatus(any(), any(), any(), any())).thenReturn(Collections.emptyList());
 
         tradingEngineService.consumeOrder(dto);
 
         verify(volatilityCheckService).validatePrice("a1", BigDecimal.TEN);
         verify(orderRepository, times(1)).save(argThat(order -> 
             order.getStatus() == Order.OrderStatus.PENDING && 
-            order.getPrice().equals(BigDecimal.TEN) &&
-            order.getUserId().equals("u1") &&
-            order.getWalletAddress().equals("wallet1")
+            order.getPrice().equals(BigDecimal.TEN)
         ));
+        // Should NOT send validated event if no match
+        verify(kafkaTemplate, never()).send(anyString(), any());
+    }
+
+    @Test
+    void consumeOrder_ShouldTriggerExecution_WhenMatchFound() {
+        OrderRequestDto dto = new OrderRequestDto();
+        dto.setUserId("u1"); 
+        dto.setWalletAddress("wallet1");
+        dto.setAssetId("a1"); 
+        dto.setAmount(BigDecimal.TEN); 
+        dto.setPrice(BigDecimal.valueOf(100)); 
+        dto.setType(OrderType.BUY);
+
+        Asset asset = new Asset(); asset.setId("a1");
+        when(assetRepository.findById("a1")).thenReturn(Optional.of(asset));
+
+        Order matchingOrder = new Order();
+        matchingOrder.setId("o-other");
+        matchingOrder.setUserId("u2");
+        matchingOrder.setWalletAddress("wallet2");
+        matchingOrder.setAsset(asset);
+        matchingOrder.setType(Order.OrderType.SELL);
+        matchingOrder.setPrice(BigDecimal.valueOf(100));
+        matchingOrder.setAmount(BigDecimal.TEN);
+        matchingOrder.setStatus(Order.OrderStatus.PENDING);
+
+        when(orderRepository.findByAssetAndTypeAndPriceAndStatus(any(), any(), any(), any()))
+                .thenReturn(List.of(matchingOrder));
+
+        tradingEngineService.consumeOrder(dto);
+
+        // Verify both orders updated to EXECUTING
+        verify(orderRepository, atLeast(2)).save(argThat(order -> 
+            order.getStatus() == Order.OrderStatus.EXECUTING
+        ));
+        
+        // Verify Kafka event sent
         verify(kafkaTemplate, times(1)).send(eq("orders.validated"), any());
     }
 

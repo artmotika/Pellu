@@ -42,9 +42,9 @@ class AuthServiceTest {
         when(passwordEncoder.encode(any())).thenReturn("hashed_pass");
         
         String wallet = "wallet123";
-        String token = authService.register(wallet, "password");
+        var response = authService.register(wallet, "password");
         
-        assertNotNull(token);
+        assertNotNull(response.getToken());
         verify(userRepository, times(1)).save(any(User.class));
         verify(kafkaTemplate, times(1)).send(eq("users.registered"), eq(wallet));
     }
@@ -61,9 +61,10 @@ class AuthServiceTest {
         when(userRepository.findByWalletAddress("wallet123")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password", "hashed_pass")).thenReturn(true);
         
-        String token = authService.login("wallet123", "password");
+        var response = authService.login("wallet123", "password");
         
-        assertNotNull(token);
+        assertNotNull(response.getToken());
+        assertEquals("user-1", response.getUserId());
     }
 
     @Test
