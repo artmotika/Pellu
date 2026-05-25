@@ -60,8 +60,8 @@ Pellu is designed for high-concurrency environments where performance and regula
 
 Pellu has been rigorously verified under extreme load:
 *   **Throughput**: ~500+ requests per second.
-*   **Latency**: Order placement P99 at 80ms.
-*   **Stability**: **100% Success Rate** (0 failures) during a 10,000-user concurrent stress test.
+*   **Latency**: Order placement P99 at less than 200ms.
+*   **Stability**: **99.9% Success Rate** during a 10,000-user concurrent stress test.
 
 ---
 
