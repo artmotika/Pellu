@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: auth-service:v22
+        image: auth-service:local-test
         imagePullPolicy: IfNotPresent
         resources:
           requests:

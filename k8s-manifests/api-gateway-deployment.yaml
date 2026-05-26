@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: api-gateway:latest
+        image: api-gateway:local-test
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080

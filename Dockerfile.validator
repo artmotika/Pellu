@@ -1,0 +1,17 @@
+FROM solanalabs/solana:v1.18.15
+
+# Копируем бинарный файл контракта в образ
+# Ожидается, что контракт уже собран в smart-contract/target/deploy/
+COPY smart-contract/target/deploy/dfa_advanced_platform.so /deploy/dfa_advanced_platform.so
+
+# Экспортируем порты RPC и Faucet
+EXPOSE 8899 9900
+
+# Запуск валидатора с предзагруженным контрактом
+# Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS - Program ID из Anchor.toml
+ENTRYPOINT ["solana-test-validator"]
+CMD [ \
+    "--limit-ledger-size", "20000000", \
+    "--slots-per-epoch", "100", \
+    "--bpf-program", "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS", "/deploy/dfa_advanced_platform.so" \
+]

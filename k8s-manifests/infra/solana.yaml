@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: solana-validator
+spec:
+  selector:
+    app: solana-validator
+  ports:
+    - name: rpc
+      port: 8899
+      targetPort: 8899
+    - name: faucet
+      port: 9900
+      targetPort: 9900
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solana-validator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solana-validator
+  template:
+    metadata:
+      labels:
+        app: solana-validator
+    spec:
+      containers:
+      - name: solana-validator
+        image: solana-validator:local
+        imagePullPolicy: IfNotPresent
+        command: ["solana-test-validator"]
+        args:
+          - "--limit-ledger-size"
+          - "20000000"
+          - "--slots-per-epoch"
+          - "100"
+          - "--bpf-program"
+          - "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+          - "/deploy/dfa_advanced_platform.so"
+        ports:
+        - containerPort: 8899
+        - containerPort: 9900

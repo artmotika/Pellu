@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: trading-engine
-        image: trading-engine:local-testing
+        image: trading-engine:local-test
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8081

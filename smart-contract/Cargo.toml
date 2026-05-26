@@ -1,26 +1,12 @@
-[package]
-name = "dfa_advanced_platform"
-version = "0.1.0"
-description = "Advanced DFA Platform Smart Contract"
-edition = "2021"
+[workspace]
+members = ["programs/*"]
+resolver = "2"
 
-[lib]
-crate-type = ["cdylib", "lib"]
-name = "dfa_advanced_platform"
+[profile.release]
+overflow-checks = true
 
-[features]
-no-entrypoint = []
-no-idl = []
-no-log-ix-name = []
-cpi = ["no-entrypoint"]
-default = []
-
-[dependencies]
-anchor-lang = "0.29.0"
-anchor-spl = "0.29.0"
-solana-program = "1.17.0"
-borsh = "0.10.3"
-
-[dev-dependencies]
-# For tests
-anchor-client = "0.29.0"
+[patch.crates-io]
+cpufeatures = { git = "https://github.com/RustCrypto/utils", tag = "cpufeatures-v0.2.16" }
+block-buffer = { git = "https://github.com/RustCrypto/utils", tag = "block-buffer-v0.10.4" }
+crypto-common = { git = "https://github.com/RustCrypto/traits", tag = "crypto-common-v0.1.6" }
+digest = { git = "https://github.com/RustCrypto/traits", tag = "digest-v0.10.7" }

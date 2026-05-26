@@ -1,0 +1,15 @@
+.pytest_cache
+.git
+.gradle
+.idea
+node_modules
+*.log
+
+# Игнорируем все папки target и build, кроме нужных артефактов
+**/target
+**/build
+!smart-contract/target/deploy/dfa_advanced_platform.so
+!auth-service/build/libs/*.jar
+!api-gateway-service/build/libs/*.jar
+!solana-connector-service/build/libs/*.jar
+!trading-engine-service/build/libs/*.jar
