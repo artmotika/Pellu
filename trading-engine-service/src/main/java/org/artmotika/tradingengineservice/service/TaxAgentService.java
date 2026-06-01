@@ -58,7 +58,6 @@ public class TaxAgentService {
     }
 
     private BigDecimal calculateCostBasis(Order order) {
-        // Use Weighted Average Cost from the user's current balance
         var balance = balanceService.getBalance(order.getUserId(), order.getAsset().getId());
         return balance != null ? balance.getWeightedAverageCost() : BigDecimal.ZERO;
     }

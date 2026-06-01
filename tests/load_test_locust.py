@@ -29,7 +29,6 @@ class TradingUser(FastHttpUser):
         self.auth_token = None
         self.asset_id = self.environment.parsed_options.asset_id
 
-        # 1. Register User
         with self.client.post(
             f"{AUTH_SERVICE_URL}/api/v1/auth/register",
             json={"wallet": self.wallet, "password": self.password},
@@ -56,7 +55,6 @@ class TradingUser(FastHttpUser):
                 resp.failure(f"Admin Reg failed: {r.status_code}")
                 return
 
-        # 3. Approve KYC
         with self.client.post(
             f"{GATEWAY_URL}/api/v1/admin/kyc",
             json={"userId": self.user_id, "approved": True},
@@ -102,7 +100,6 @@ class TradingUser(FastHttpUser):
     def trade(self):
         if not self.auth_token: return
 
-        # Matchable price set
         prices = [98.0, 99.0, 100.0, 101.0, 102.0]
         order_data = {
             "assetId": self.asset_id,

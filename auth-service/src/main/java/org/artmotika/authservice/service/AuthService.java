@@ -71,7 +71,7 @@ public class AuthService {
                 .id(UUID.randomUUID().toString())
                 .walletAddress(mockWallet)
                 .kycStatus(KycStatus.APPROVED) // ESIA users are pre-verified
-                .qualified(false)    // Default to retail investor
+                .qualified(false)
                 .amlRiskScore(0)
                 .password(passwordEncoder.encode("ESIA_OAUTH_" + code))
                 .build();

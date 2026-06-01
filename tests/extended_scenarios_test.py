@@ -104,17 +104,14 @@ class MasterTestSuite:
         uid = self.register_user("compliance_user")
         aid = self.setup_asset("TRADING")
         
-        # 1. PENDING (rejected)
         r1 = requests.post(f"{GATEWAY_URL}/api/v1/orders", json={
             "assetId": aid, "type": "BUY", "amount": 1, "price": 100.0
         }, headers=self.get_auth_header("compliance_user"))
         if r1.status_code == 403: log("SUCCESS: PENDING user rejected")
         else: error(f"FAILURE: PENDING user accepted: {r1.status_code}")
 
-        # 2. APPROVE
         requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         
-        # Verification loop for claims
         log("Waiting for KYC approval to propagate...")
         approved = False
         for _ in range(30):
@@ -143,7 +140,6 @@ class MasterTestSuite:
         self.login_user("frozen_user")
         aid = self.setup_asset("TRADING")
 
-        # Freeze
         requests.post(f"{GATEWAY_URL}/api/v1/admin/freeze", json={"userId": uid, "freeze": True}, headers=self.get_auth_header())
         time.sleep(2)
         self.login_user("frozen_user")
@@ -205,13 +201,11 @@ class MasterTestSuite:
         log("--- SCENARIO: GOVERNANCE ---")
         aid = self.setup_asset("TRADING")
         
-        # Start
         vote_req = {"assetId": aid, "proposal": "New Director", "durationMinutes": 5}
         resp = requests.post(f"{GATEWAY_URL}/api/v1/admin/vote", json=vote_req, headers=self.get_auth_header())
         action_id = resp.json().get("actionId")
         log(f"Vote started: {action_id}")
 
-        # Cast
         uid = self.register_user("governance_voter")
         requests.post(f"{GATEWAY_URL}/api/v1/admin/kyc", json={"userId": uid, "approved": True}, headers=self.get_auth_header())
         time.sleep(1)

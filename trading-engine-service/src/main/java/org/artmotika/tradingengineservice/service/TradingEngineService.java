@@ -106,7 +106,6 @@ public class TradingEngineService {
     private void matchOrder(Order order) {
         Order.OrderType targetType = (order.getType() == Order.OrderType.BUY) ? Order.OrderType.SELL : Order.OrderType.BUY;
         
-        // Find a matching order: opposite type, same asset, same price, still PENDING
         List<Order> matchingOrders = orderRepository.findByAssetAndTypeAndPriceAndStatus(
                 order.getAsset(), targetType, order.getPrice(), Order.OrderStatus.PENDING);
 
@@ -133,7 +132,6 @@ public class TradingEngineService {
         orderRepository.save(sellOrder);
 
         // Send to Solana Connector for on-chain settlement
-        // We pick the buyer and seller wallets
         ValidatedOrderEventDto event = new ValidatedOrderEventDto();
         event.setId(buyOrder.getId()); // Using buyOrder ID as primary
         event.setAssetId(buyOrder.getAsset().getId());

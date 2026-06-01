@@ -29,7 +29,6 @@ public class AmlKycService {
         log.debug("Processing order for user: {}, wallet: {}, KYC: {}, qualified: {}, amlRisk: {}", 
             user.getId(), user.getWalletAddress(), user.getKycStatus(), user.isQualified(), user.getAmlRiskScore());
         
-        // Ensure the order matches the authenticated user
         order.setUserId(user.getId());
         order.setWalletAddress(user.getWalletAddress());
 
@@ -44,7 +43,6 @@ public class AmlKycService {
             }
         }
 
-        log.info("Sending to Kafka: {}", order);
         kafkaTemplate.send("orders.created", order);
     }
 }

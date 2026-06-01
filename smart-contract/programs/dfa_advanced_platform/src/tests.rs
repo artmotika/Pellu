@@ -40,11 +40,9 @@ fn test_user_registration_state() {
 fn test_kyc_status_transition() {
     let mut user = create_mock_user(Pubkey::new_unique());
     
-    // Approve KYC
     user.is_kyc_approved = true;
     assert!(user.is_kyc_approved);
     
-    // Revoke KYC
     user.is_kyc_approved = false;
     assert!(!user.is_kyc_approved);
 }
@@ -62,7 +60,7 @@ fn test_account_freezing_logic() {
 
 #[test]
 fn test_trading_locked_by_timestamp() {
-    let asset = create_mock_asset(); // unlock_timestamp = 1000
+    let asset = create_mock_asset();
     let current_time = 500i64;
     assert!(current_time < asset.trade_unlock_timestamp, "Trading must be locked");
 }
